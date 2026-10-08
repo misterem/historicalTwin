@@ -9,3 +9,4 @@ data/
 
 # Local Claude Code guidance, not published
 CLAUDE.md
+.claude/
