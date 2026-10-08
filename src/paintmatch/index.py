@@ -109,9 +109,18 @@ class FaceIndex:
         min_det_score: float = 0.0,
         one_per_image: bool = True,
     ) -> list[dict]:
-        """Return the k most similar faces as dicts: FACE_FIELDS, face_id, score, and
-        PAINTING_FIELDS when the painting's metadata is known."""
-        scores = self.embeddings @ query.astype(np.float32)
+        """Return the k faces most similar to an ArcFace query embedding (see rank())."""
+        return self.rank(self.embeddings @ query.astype(np.float32), k, min_det_score, one_per_image)
+
+    def rank(
+        self,
+        scores: np.ndarray,
+        k: int = 5,
+        min_det_score: float = 0.0,
+        one_per_image: bool = True,
+    ) -> list[dict]:
+        """Turn per-face scores (higher = more similar) into the top k results as dicts:
+        FACE_FIELDS, face_id, score, and PAINTING_FIELDS when the painting's metadata is known."""
         if min_det_score > 0:
             scores = np.where(self.faces["det_score"] >= min_det_score, scores, -np.inf)
 
