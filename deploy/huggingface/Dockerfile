@@ -26,13 +26,18 @@ RUN .venv/bin/python -c "from paintmatch.faces import FaceEmbedder; FaceEmbedder
              /app/insightface/models/buffalo_l/2d106det.onnx \
              /app/insightface/models/buffalo_l/genderage.onnx
 
-# Face index + painting images, pinned to an exact dataset commit.
+# Face index + painting images, pinned to an exact dataset commit. The dataset splits images
+# into subfolders (HF allows 10k files per folder); the app expects them flat
+# (thumbs/<id>.jpg, crops/<id>_<n>.jpg), so they're moved back up after download.
 ARG ASSETS_REPO=__ASSETS_REPO__
 ARG ASSETS_REVISION=__ASSETS_REVISION__
 RUN .venv/bin/python -c "import sys; from huggingface_hub import snapshot_download; \
 snapshot_download(sys.argv[1], repo_type='dataset', revision=sys.argv[2], local_dir='/app/data', \
 allow_patterns=['index/*', 'thumbs/*', 'crops/*'], max_workers=16)" "$ASSETS_REPO" "$ASSETS_REVISION" \
-    && rm -rf /app/data/.cache
+    && rm -rf /app/data/.cache \
+    && .venv/bin/python -c "import pathlib; [p.rename(p.parent.parent / p.name) \
+for d in ('thumbs', 'crops') for p in pathlib.Path('/app/data', d).glob('*/*.jpg')]" \
+    && find /app/data/thumbs /app/data/crops -mindepth 1 -type d -empty -delete
 
 
 FROM python:3.11-slim
