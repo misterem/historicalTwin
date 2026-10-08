@@ -51,6 +51,32 @@ uv run indexing/build_metadata.py   # writes data/index/paintings.json
 
 Run it after `build_index.py` has downloaded the images, and restart the API afterwards.
 
+## Review match quality
+
+Put 20–30 photos of different people in a folder, then build a side-by-side review page:
+
+```bash
+uv run evaluation/review_matches.py ~/Pictures/selfies
+```
+
+For each photo the page shows the top matches from four variants: ArcFace with detector
+input 640 (what the app ships) and 320, DINOv2 appearance similarity, and a blend of ArcFace
+and DINOv2. Variant names are hidden and rows shuffled until you click "Reveal", so you
+judge them blind.
+
+- The page is written to `data/reviews/<folder>-<timestamp>/report.html` and loads the
+  painting images from `data/`. To view it, serve `data/` locally and open the report URL:
+
+  ```bash
+  python3 -m http.server 8790 --bind 127.0.0.1 --directory data
+  ```
+
+- The report embeds crops of your photos' faces, so keep it local.
+- The first run embeds every painting face with DINOv2, which takes about 10 minutes. The
+  result is cached in `data/reviews/_cache/`.
+- `--variants arcface,blend` picks a subset, and `--alpha` sets ArcFace's weight in the
+  blend (default 0.7).
+
 ## Run the backend
 
 ```bash

@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Match Review</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f1e7; --surface: #fffaf0; --text: #2a2420; --muted: #6f655b;
+    --accent: #8a5a2b; --accent-text: #fffaf0; --border: rgb(42 36 32 / 0.15);
+    --pick-bg: #f1e3cc; --none-bg: #f3dfd9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16130f; --surface: #211c17; --text: #efe6d8; --muted: #a89c8c;
+      --accent: #d4a464; --accent-text: #16130f; --border: rgb(239 230 216 / 0.15);
+      --pick-bg: #3a2e1e; --none-bg: #3a221b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { margin: 0 0 4px; font-size: 1.6rem; }
+  .meta, .hint { color: var(--muted); margin: 0; }
+  .hint { margin-top: 8px; max-width: 70ch; }
+  .bar {
+    position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    margin: 16px -16px; padding: 12px 16px; background: var(--bg); border-bottom: 1px solid var(--border);
+  }
+  .progress { font-variant-numeric: tabular-nums; }
+  button {
+    min-height: 36px; padding: 0 14px; border: 1px solid var(--border); border-radius: 999px;
+    background: var(--surface); color: var(--text); font: inherit; cursor: pointer;
+  }
+  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  table { border-collapse: collapse; margin-top: 4px; }
+  th, td { padding: 4px 12px 4px 0; text-align: left; font-variant-numeric: tabular-nums; }
+  .tally { width: 100%; }
+  .card { margin-top: 20px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .card header { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+  .card header h2 { margin: 0; font-size: 1rem; word-break: break-all; }
+  .selfie { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; flex: none; }
+  .error { color: var(--muted); font-style: italic; }
+  .row { display: grid; grid-template-columns: 72px 1fr auto; align-items: center; gap: 12px; padding: 8px; border-radius: 10px; }
+  .row.picked { background: var(--pick-bg); }
+  .row .label { font-weight: 600; }
+  .matches { display: flex; gap: 8px; overflow-x: auto; }
+  .matches a { flex: none; width: 88px; text-align: center; color: var(--muted); font-size: 0.8rem; text-decoration: none; font-variant-numeric: tabular-nums; }
+  .matches img { display: block; width: 88px; height: 88px; border-radius: 50%; object-fit: cover; margin-bottom: 2px; }
+  .none { margin-top: 8px; }
+  .card.none-picked { background: linear-gradient(var(--none-bg), var(--surface)); }
+  @media (max-width: 600px) {
+    .row { grid-template-columns: 1fr; }
+    .matches a, .matches img { width: 64px; height: auto; }
+    .matches img { height: 64px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Match review</h1>
+  <p class="meta" id="meta"></p>
+  <p class="hint">For each photo, pick the row whose paintings look most like the person. Rows are shuffled and
+    their variants hidden so the comparison is blind; click a painting to open it. Your picks are saved in this
+    browser. When you're done, reveal the variants to see which one won.</p>
+  <div class="bar">
+    <span class="progress" id="progress"></span>
+    <button type="button" id="reveal" aria-pressed="false">Reveal variants</button>
+    <button type="button" id="reset">Clear picks</button>
+  </div>
+  <section id="tally" hidden></section>
+  <section id="photos"></section>
+</main>
+<script id="data" type="application/json">__DATA__</script>
+<script>
+  const data = JSON.parse(document.getElementById("data").textContent);
+  const storageKey = "match-review:" + data.id;
+  const labels = Object.fromEntries(data.variants.map(v => [v.id, v.label]));
+  let picks = {};
+  let revealed = false;
+  try { picks = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch {}
+
+  function save() {
+    try { localStorage.setItem(storageKey, JSON.stringify(picks)); } catch {}
+  }
+
+  // Stable per-photo shuffle, so row letters don't change between reloads.
+  function shuffled(items, seedText) {
+    let seed = 0;
+    for (const ch of seedText) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+    const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+    const out = [...items];
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  }
+
+  function el(tag, attrs = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") node.className = v;
+      else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+      else node.setAttribute(k, v);
+    }
+    node.append(...children.filter(c => c != null));
+    return node;
+  }
+
+  function render() {
+    const rated = data.photos.filter(p => !p.error && picks[p.name]).length;
+    const ratable = data.photos.filter(p => !p.error).length;
+    document.getElementById("meta").textContent =
+      `${data.photos.length} photos · ${data.paintingFaces.toLocaleString()} painting faces · built ${data.created}`;
+    document.getElementById("progress").textContent = `${rated} of ${ratable} rated`;
+    document.getElementById("reveal").setAttribute("aria-pressed", String(revealed));
+    renderTally();
+
+    const container = document.getElementById("photos");
+    container.replaceChildren(...data.photos.map(photo => {
+      const card = el("article", { class: "card" + (picks[photo.name] === "none" ? " none-picked" : "") });
+      card.append(el("header", {},
+        photo.face ? el("img", { class: "selfie", src: photo.face, alt: "" }) : null,
+        el("h2", {}, photo.name)));
+      if (photo.error) {
+        card.append(el("p", { class: "error" }, photo.error));
+        return card;
+      }
+      const order = shuffled(data.variants.map(v => v.id), photo.name);
+      order.forEach((variant, i) => {
+        const matches = photo.results[variant];
+        const picked = picks[photo.name] === variant;
+        const row = el("div", { class: "row" + (picked ? " picked" : "") },
+          el("span", { class: "label" }, revealed ? labels[variant] : `Row ${"ABCDEFGH"[i]}`),
+          matches
+            ? el("div", { class: "matches" }, ...matches.map(m =>
+                el("a", { href: m.thumb, target: "_blank", rel: "noreferrer", title: m.caption || "Unknown painting" },
+                  el("img", { src: m.crop, alt: m.caption || "painting face", loading: "lazy" }), m.score.toFixed(2))))
+            : el("p", { class: "error" }, "no face found at this detector size"),
+          el("button", { type: "button", "aria-pressed": String(picked), onclick: () => pick(photo.name, variant) }, "Best"));
+        card.append(row);
+      });
+      card.append(el("button", {
+        type: "button", class: "none", "aria-pressed": String(picks[photo.name] === "none"),
+        onclick: () => pick(photo.name, "none"),
+      }, "None look right"));
+      return card;
+    }));
+  }
+
+  function renderTally() {
+    const section = document.getElementById("tally");
+    section.hidden = !revealed;
+    if (!revealed) return;
+    const wins = Object.fromEntries(data.variants.map(v => [v.id, 0]));
+    let none = 0;
+    for (const photo of data.photos) {
+      const choice = picks[photo.name];
+      if (choice === "none") none++;
+      else if (choice in wins) wins[choice]++;
+    }
+    // Scores aren't comparable across variants (different similarity scales), so only picks are tallied.
+    const rated = Object.values(wins).reduce((a, b) => a + b, 0) + none;
+    const share = n => (rated ? `${Math.round((100 * n) / rated)}%` : "–");
+    section.replaceChildren(el("table", { class: "tally" },
+      el("thead", {}, el("tr", {}, el("th", {}, "Variant"), el("th", {}, "Picked as best"), el("th", {}, "Share of rated"))),
+      el("tbody", {},
+        ...data.variants.map(v => el("tr", {}, el("td", {}, v.label), el("td", {}, String(wins[v.id])), el("td", {}, share(wins[v.id])))),
+        el("tr", {}, el("td", {}, "None look right"), el("td", {}, String(none)), el("td", {}, share(none))))));
+  }
+
+  function pick(name, choice) {
+    picks[name] = picks[name] === choice ? undefined : choice;
+    if (picks[name] === undefined) delete picks[name];
+    save();
+    render();
+  }
+
+  document.getElementById("reveal").addEventListener("click", () => { revealed = !revealed; render(); });
+  document.getElementById("reset").addEventListener("click", () => {
+    if (confirm("Clear all picks for this review?")) { picks = {}; save(); render(); }
+  });
+  render();
+</script>
+</body>
+</html>
