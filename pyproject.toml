@@ -25,5 +25,12 @@ packages = ["src/paintmatch"]
 [dependency-groups]
 dev = [
     "boto3>=1.43.109",
+    "httpx>=0.28.1",
     "imagehash>=4.3.2",
+    "pytest>=9.1.1",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# backend/ is imported as a package; the indexing and evaluation scripts as plain modules.
+pythonpath = [".", "indexing", "evaluation"]

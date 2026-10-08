@@ -25,6 +25,15 @@ Requires [uv](https://docs.astral.sh/uv/). It installs Python 3.11 and the depen
 uv sync
 ```
 
+## Tests
+
+```bash
+uv run pytest
+```
+
+The tests use a tiny synthetic index and a fake face model, so they run in about a second
+with no downloads. CI runs them on pull requests that touch Python code.
+
 ## Build the index
 
 ```bash
