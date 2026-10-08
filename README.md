@@ -38,6 +38,19 @@ uv run indexing/build_index.py               # all 15k paintings
   and pass `--providers CUDAExecutionProvider CPUExecutionProvider`.
 - Run `hf auth login` first if downloads get rate-limited.
 
+## Add painting metadata
+
+The dataset only has hashed filenames. This step looks each painting up in the
+[ArtGAN WikiArt](https://www.kaggle.com/datasets/steubk/wikiart) dataset by perceptual hash
+and records its artist, title and year. About 71% of paintings match; the rest get no
+caption rather than a wrong one.
+
+```bash
+uv run indexing/build_metadata.py   # writes data/index/paintings.json
+```
+
+Run it after `build_index.py` has downloaded the images, and restart the API afterwards.
+
 ## Run the backend
 
 ```bash
@@ -83,4 +96,5 @@ the browser before uploading it.
 ## Licensing note
 
 InsightFace's pretrained `buffalo_l` weights are licensed for **non-commercial research only**.
-Swap in a permissively licensed embedder before any commercial use.
+Swap in a permissively licensed embedder before any commercial use. The ArtGAN WikiArt dataset
+used for painting metadata is likewise provided for non-commercial research only.
