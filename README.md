@@ -97,36 +97,70 @@ the browser before uploading it.
 
 ## Deploy
 
-The live app is free to host:
+The live app at https://twin.maxaltman.com runs on:
 
-- **Website:** Netlify serves the static frontend at `twin.maxaltman.com`, building it from
-  this repo.
-- **API and images:** a Hugging Face Space (Docker, free CPU tier) runs the matching API and
-  also serves the painting thumbnails and face crops.
-- **Assets:** a Hugging Face dataset holds the face index, painting metadata and images. The
-  Space downloads it when it builds.
+- **Website:** Netlify serves the static frontend, building it from this repo.
+- **API and images:** Google Cloud Run runs the matching API, which also serves the
+  painting thumbnails and face crops. It scales to zero when idle, so at hobby traffic it
+  stays within Cloud Run's free tier.
+- **Assets:** a Hugging Face dataset holds the face index, painting metadata and images.
+  The API image downloads it at build time.
 
-### 1. Publish the assets and the API
+### 1. Publish the assets
 
-Log in with a Hugging Face token that has write access (`hf auth login`), then run:
+Log in with a Hugging Face token that has write access (`uv run hf auth login`), then run:
 
 ```bash
 uv run deploy/publish.py assets   # index + ~30k images -> HF dataset (resumable)
-uv run deploy/publish.py space    # code -> HF Space, pinned to the current assets commit
 ```
 
-The Space builds on Hugging Face's servers in a few minutes. Re-run `space` after code
-changes, and `assets` then `space` after re-indexing. The defaults (`mixitymax/...` repos,
-CORS origin `https://twin.maxaltman.com`) can be changed with flags; see `--help`.
+Hugging Face allows at most 10,000 files per folder, so the images are uploaded into
+subfolders. `deploy/Dockerfile` flattens them back after downloading.
 
-A free Space sleeps after 48 hours without visitors, so the first request after that takes
-a minute or so while it restarts.
+### 2. Deploy the API to Cloud Run
 
-### 2. Website on Netlify
+You need a Google Cloud project with billing enabled; setting a budget alert is a good
+idea. Then install and log in to the gcloud CLI:
 
-Create a new site from this GitHub repo with **base directory `frontend`**. Build settings
-come from `frontend/netlify.toml`, including the API URL. Then add `twin.maxaltman.com`
-under Domain management. With Netlify DNS, the record is created automatically.
+```bash
+brew install --cask gcloud-cli
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+```
+
+In a new project, Cloud Build runs as the default compute service account, which can't read
+the uploaded source until it has the Cloud Run Builder role. This is a one-time step;
+replace `PROJECT_ID` and `PROJECT_NUMBER`. `gcloud projects describe PROJECT_ID` shows the
+number.
+
+```bash
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member=serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com \
+  --role=roles/run.builder
+```
+
+Then deploy:
+
+```bash
+uv run deploy/publish.py cloudrun
+```
+
+Cloud Build builds `deploy/Dockerfile` on Google's servers, pinned to the assets dataset's
+current commit, and deploys it with these settings:
+- 2 GiB of RAM and 1 CPU
+- scales to zero when idle, with at most 3 instances
+- CORS allows `https://twin.maxaltman.com`
+
+The first request after a quiet period takes about 10–20 seconds while an instance starts.
+The site pings the API as soon as the page opens to hide most of that delay. Re-run
+`cloudrun` after code changes, and run `assets` then `cloudrun` after re-indexing.
+
+### 3. Website on Netlify
+
+Create a new site from this GitHub repo with **base directory `frontend`** and production
+branch `main`. Build settings, including the API URL, come from `frontend/netlify.toml`.
+Then add `twin.maxaltman.com` under Domain management. With Netlify DNS, the record is
+created automatically.
 
 ### Alternative: your own container host
 

@@ -13,4 +13,4 @@
   # raw (404 at /). Skipping it makes the deploy the same either way.
   NETLIFY_NEXT_PLUGIN_SKIP = "true"
   # Baked into the bundle at build time (see frontend/README.md).
-  NEXT_PUBLIC_API_URL = "https://mixitymax-historicaltwin-api.hf.space"
+  NEXT_PUBLIC_API_URL = "https://historicaltwin-api-590976791342.us-central1.run.app"
