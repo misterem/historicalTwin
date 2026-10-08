@@ -1,0 +1,128 @@
+:root {
+  color-scheme: light dark;
+
+  --bg: #f6f1e7;
+  --surface: #fffaf0;
+  --text: #2a2420;
+  --muted: #6f655b;
+  --accent: #8a5a2b;
+  --accent-text: #fffaf0;
+  --frame: #b08d57;
+  --border-strong: rgb(42 36 32 / 0.35);
+  --error-bg: #fbeae5;
+  --error-border: #e2b4a6;
+  --error-text: #7a2e1c;
+  --shadow: 0 10px 30px rgb(42 36 32 / 0.18);
+  --radius: 14px;
+
+  --font-display: var(--font-cormorant), Georgia, serif;
+  --font-body: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16130f;
+    --surface: #211c17;
+    --text: #efe6d8;
+    --muted: #a89c8c;
+    --accent: #d4a464;
+    --accent-text: #16130f;
+    --frame: #a8834a;
+    --border-strong: rgb(239 230 216 / 0.35);
+    --error-bg: #3a1f17;
+    --error-border: #7a3b29;
+    --error-text: #f3c4b5;
+    --shadow: 0 10px 30px rgb(0 0 0 / 0.5);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+  min-height: 100dvh;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 48px 16px 32px;
+}
+
+.hero {
+  text-align: center;
+}
+
+.hero h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.75rem, 10vw, 4.5rem);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.hero p {
+  max-width: 34ch;
+  margin: 16px auto 0;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+.footer {
+  margin-top: auto;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.footer p {
+  margin: 4px 0;
+}
+
+.button {
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.button.primary {
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.button.secondary {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+}
+
+.button:focus-visible {
+  outline: 3px solid var(--frame);
+  outline-offset: 2px;
+}
