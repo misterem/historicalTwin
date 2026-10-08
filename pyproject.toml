@@ -25,4 +25,5 @@ packages = ["src/paintmatch"]
 [dependency-groups]
 dev = [
     "boto3>=1.43.109",
+    "imagehash>=4.3.2",
 ]
