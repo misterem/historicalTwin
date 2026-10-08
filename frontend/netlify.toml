@@ -1,0 +1,13 @@
+# Netlify site for twin.maxaltman.com. In the Netlify UI, set the base directory to
+# `frontend`; everything else comes from this file.
+
+[build]
+  command = "npm run build"
+  # Netlify's Next.js adapter reads the build info in .next and itself publishes the static
+  # export from out/ (it handles `output: "export"`), so this must be .next, not out.
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "24"
+  # Baked into the bundle at build time (see frontend/README.md).
+  NEXT_PUBLIC_API_URL = "https://mixitymax-historicaltwin-api.hf.space"

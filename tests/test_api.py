@@ -57,6 +57,13 @@ def test_match_k_is_clamped(client):
     assert len(post_photo(client, photo_bytes(red=0), k=0).json()["matches"]) == 1
 
 
+def test_painting_images_are_served_with_cache_headers(client, data_dir):
+    (data_dir / "crops" / "bbb_0.jpg").write_bytes(photo_bytes(red=2, fmt="JPEG"))
+    res = client.get("/crops/bbb_0.jpg")
+    assert res.status_code == 200
+    assert res.headers["cache-control"] == "public, max-age=604800"
+
+
 def test_no_face_is_422(client):
     res = post_photo(client, photo_bytes(face=False))
     assert res.status_code == 422

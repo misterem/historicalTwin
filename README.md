@@ -97,36 +97,58 @@ the browser before uploading it.
 
 ## Deploy
 
-1. **Images → Cloudflare R2.** Create a bucket and make it public: either connect a custom
-   domain (recommended, since it goes through Cloudflare's CDN cache) or enable the `r2.dev`
-   URL (rate-limited, fine for testing). Then create an R2 API token with Object Read & Write
-   on that bucket and upload:
+The live app is free to host:
 
+- **Website:** Netlify serves the static frontend at `twin.maxaltman.com`, building it from
+  this repo.
+- **API and images:** a Hugging Face Space (Docker, free CPU tier) runs the matching API and
+  also serves the painting thumbnails and face crops.
+- **Assets:** a Hugging Face dataset holds the face index, painting metadata and images. The
+  Space downloads it when it builds.
+
+### 1. Publish the assets and the API
+
+Log in with a Hugging Face token that has write access (`hf auth login`), then run:
+
+```bash
+uv run deploy/publish.py assets   # index + ~30k images -> HF dataset (resumable)
+uv run deploy/publish.py space    # code -> HF Space, pinned to the current assets commit
+```
+
+The Space builds on Hugging Face's servers in a few minutes. Re-run `space` after code
+changes, and `assets` then `space` after re-indexing. The defaults (`mixitymax/...` repos,
+CORS origin `https://twin.maxaltman.com`) can be changed with flags; see `--help`.
+
+A free Space sleeps after 48 hours without visitors, so the first request after that takes
+a minute or so while it restarts.
+
+### 2. Website on Netlify
+
+Create a new site from this GitHub repo with **base directory `frontend`**. Build settings
+come from `frontend/netlify.toml`, including the API URL. Then add `twin.maxaltman.com`
+under Domain management. With Netlify DNS, the record is created automatically.
+
+### Alternative: your own container host
+
+The root `Dockerfile` builds an API image that leaves the images out, to pair with a CDN:
+
+1. **Images:** upload them to Cloudflare R2:
    ```bash
    export R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... R2_BUCKET=...
-   uv run indexing/upload_to_r2.py --dry-run
    uv run indexing/upload_to_r2.py
    ```
-
-   It skips files that are already in the bucket, so re-run it after re-indexing.
-
-2. **API → container.** `data/index` must exist before you build. The model weights and the
-   index are baked into the image (no downloads at startup), but the thumbnails and crops
-   are not.
-
+2. **API image:** build it. `data/index` must exist.
    ```bash
    docker build --platform linux/amd64 -t paintmatch-api .
    ```
+   Deploy it with 1–2 GB of RAM.
 
-   Deploy it to Cloud Run, Fly.io or Render with 1–2 GB RAM, and keep one instance always
-   running to avoid cold starts.
-
-   | env var | purpose |
-   |---|---|
-   | `PAINTMATCH_IMAGE_BASE_URL` | public URL of the R2 bucket, e.g. `https://images.yourdomain.com` (required in the container) |
-   | `PAINTMATCH_ALLOWED_ORIGINS` | comma-separated frontend origins allowed by CORS |
-   | `PAINTMATCH_SELFIE_DET_SIZE` | `640` (default) or `320`: about 1.7x faster, scores shift slightly |
-   | `PORT` | set by the host; defaults to 8080 |
+| env var | purpose |
+|---|---|
+| `PAINTMATCH_IMAGE_BASE_URL` | public URL of the image bucket (required in that image) |
+| `PAINTMATCH_ALLOWED_ORIGINS` | comma-separated site origins allowed by CORS |
+| `PAINTMATCH_SELFIE_DET_SIZE` | `640` (default) or `320`: about 1.7x faster, scores shift slightly |
+| `PORT` | set by the host; defaults to 8080 |
 
 ## Licensing note
 

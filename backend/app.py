@@ -35,6 +35,15 @@ SELFIE_DET_SIZE = int(os.environ.get("PAINTMATCH_SELFIE_DET_SIZE", "640"))
 state: dict = {}
 
 
+class CachedStaticFiles(StaticFiles):
+    """Painting images never change under a given name, so browsers may cache them for a week."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "public, max-age=604800"
+        return response
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     state["embedder"] = FaceEmbedder(det_size=SELFIE_DET_SIZE)
@@ -90,6 +99,6 @@ if not IMAGE_BASE_URL:
             f"{DATA_DIR / 'thumbs'} not found: set PAINTMATCH_IMAGE_BASE_URL to where the images are hosted "
             "(the Docker image doesn't include them), or run indexing/build_index.py first"
         )
-    app.mount("/thumbs", StaticFiles(directory=DATA_DIR / "thumbs"), name="thumbs")
-    app.mount("/crops", StaticFiles(directory=DATA_DIR / "crops"), name="crops")
+    app.mount("/thumbs", CachedStaticFiles(directory=DATA_DIR / "thumbs"), name="thumbs")
+    app.mount("/crops", CachedStaticFiles(directory=DATA_DIR / "crops"), name="crops")
 app.mount("/", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="static")
