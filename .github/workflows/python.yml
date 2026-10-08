@@ -1,0 +1,52 @@
+name: Python
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "backend/**"
+      - "indexing/**"
+      - "evaluation/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - ".github/workflows/python.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "backend/**"
+      - "indexing/**"
+      - "evaluation/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - ".github/workflows/python.yml"
+
+permissions:
+  contents: read
+
+# A newer push to the same branch cancels the run in progress.
+concurrency:
+  group: python-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      # Installs the Python version from .python-version; the cache keeps the compiled
+      # insightface wheel between runs.
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+
+      - run: uv sync --locked
+
+      # Tests use a synthetic index and a fake face model: no model or dataset downloads.
+      - run: uv run pytest
