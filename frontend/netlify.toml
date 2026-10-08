@@ -3,11 +3,14 @@
 
 [build]
   command = "npm run build"
-  # Netlify's Next.js adapter reads the build info in .next and itself publishes the static
-  # export from out/ (it handles `output: "export"`), so this must be .next, not out.
-  publish = ".next"
+  # The app is a plain static export (output: "export"), so publish out/ directly.
+  publish = "out"
 
 [build.environment]
   NODE_VERSION = "24"
+  # A static export doesn't need Netlify's Next.js adapter. When it was auto-applied it
+  # expected publish = ".next"; on this site it didn't run at all and .next was published
+  # raw (404 at /). Skipping it makes the deploy the same either way.
+  NETLIFY_NEXT_PLUGIN_SKIP = "true"
   # Baked into the bundle at build time (see frontend/README.md).
   NEXT_PUBLIC_API_URL = "https://mixitymax-historicaltwin-api.hf.space"
