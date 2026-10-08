@@ -15,6 +15,8 @@ Requires `hf auth login` with a token that has write access.
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import shutil
 import sys
 import tempfile
@@ -26,7 +28,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SPACE_TEMPLATE = Path(__file__).resolve().parent / "huggingface"
 # Code the Space needs to build the API image (see deploy/huggingface/Dockerfile).
 SPACE_FILES = ["pyproject.toml", "uv.lock", ".python-version", "src", "backend"]
-ASSET_PATTERNS = ["index/index.npz", "index/paintings.json", "thumbs/*.jpg", "crops/*.jpg"]
+INDEX_FILES = ["index/index.npz", "index/paintings.json"]
+IMAGE_DIRS = ["thumbs", "crops"]
+# Hugging Face repos allow at most 10,000 files per directory, so images are uploaded into
+# subfolders named by the first two hex characters of the image ID (256 folders of ~60 files).
+# The Space's Dockerfile flattens them back to thumbs/<id>.jpg and crops/<id>_<n>.jpg.
+FLAT_IMAGE = re.compile(r"^(thumbs|crops)/[^/]+\.jpg$")
 
 ASSETS_README = """---
 license: other
@@ -37,7 +44,8 @@ pretty_name: Historical Twin assets
 
 Build-time assets for the [Historical Twin API Space]({space_url}): the face index
 (`index/index.npz`), painting metadata (`index/paintings.json`), painting thumbnails
-(`thumbs/`) and face crops (`crops/`).
+(`thumbs/`) and face crops (`crops/`). Images are split into subfolders by the first two
+characters of their ID, because Hugging Face allows at most 10,000 files per folder.
 
 Generated from [mixitymax/wikiart-portraits](https://huggingface.co/datasets/mixitymax/wikiart-portraits)
 by https://github.com/misterem/historicalTwin. Paintings come from WikiArt. Face embeddings
@@ -85,9 +93,40 @@ def check_assets(data_dir: Path) -> None:
         sys.exit(f"missing {len(missing_crops)} crops and {len(missing_thumbs)} thumbnails: re-run build_index.py")
 
 
+def shard(filename: str) -> str:
+    return f"{filename[:2]}/{filename}"
+
+
+def stage_assets(data_dir: Path, stage_dir: Path) -> int:
+    """Lay out the repo contents in stage_dir using hard links (no copying). Returns the file count."""
+    if stage_dir.exists():  # rebuild the links, but keep the upload's resume cache
+        for child in stage_dir.iterdir():
+            if child.name != ".cache":
+                shutil.rmtree(child) if child.is_dir() else child.unlink()
+    n = 0
+    for rel in INDEX_FILES:
+        (stage_dir / rel).parent.mkdir(parents=True, exist_ok=True)
+        os.link(data_dir / rel, stage_dir / rel)
+        n += 1
+    for folder in IMAGE_DIRS:
+        for src in (data_dir / folder).glob("*.jpg"):
+            dst = stage_dir / folder / shard(src.name)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            os.link(src, dst)
+            n += 1
+    return n
+
+
 def publish_assets(api: HfApi, args: argparse.Namespace) -> None:
     check_assets(args.data_dir)
     api.create_repo(args.assets_repo, repo_type="dataset", exist_ok=True)
+    # Remove images from an older flat layout before uploading the sharded one.
+    remote = api.list_repo_files(args.assets_repo, repo_type="dataset")
+    for folder in IMAGE_DIRS:
+        if any(FLAT_IMAGE.match(f) and f.startswith(folder + "/") for f in remote):
+            print(f"removing flat {folder}/ from the dataset")
+            api.delete_folder(folder, repo_id=args.assets_repo, repo_type="dataset",
+                              commit_message=f"Remove flat {folder}/ (too many files per folder)")
     api.upload_file(
         repo_id=args.assets_repo,
         repo_type="dataset",
@@ -95,12 +134,16 @@ def publish_assets(api: HfApi, args: argparse.Namespace) -> None:
         path_in_repo="README.md",
         commit_message="Update dataset card",
     )
+    # Staged inside data/ so hard links work (same filesystem) and the upload's resume
+    # cache, kept in the staged folder, survives between runs.
+    stage_dir = args.data_dir / ".publish-assets"
+    print(f"staged {stage_assets(args.data_dir, stage_dir)} files")
     # Large folders are committed in batches; re-running resumes an interrupted upload.
     api.upload_folder(
         repo_id=args.assets_repo,
         repo_type="dataset",
-        folder_path=args.data_dir,
-        allow_patterns=ASSET_PATTERNS,
+        folder_path=stage_dir,
+        ignore_patterns=[".cache/**"],
         commit_message="Update face index and painting images",
     )
     print(f"assets: https://huggingface.co/datasets/{args.assets_repo} @ {api.dataset_info(args.assets_repo).sha}")

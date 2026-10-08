@@ -33,4 +33,4 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # backend/ is imported as a package; the indexing and evaluation scripts as plain modules.
-pythonpath = [".", "indexing", "evaluation"]
+pythonpath = [".", "indexing", "evaluation", "deploy"]
