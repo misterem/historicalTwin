@@ -1,0 +1,14 @@
+.venv
+.git
+.idea
+**/__pycache__
+**/.DS_Store
+
+# Only data/index goes into the image; images are served from R2.
+data/raw
+data/thumbs
+data/crops
+
+frontend
+training
+indexing

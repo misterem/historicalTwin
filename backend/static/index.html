@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Paintmatch (dev)</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 16px; }
+    #results { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 1rem; }
+    figure { margin: 0; }
+    figure img { width: 100%; border-radius: 6px; display: block; }
+    figcaption { font-size: 0.85rem; opacity: 0.7; margin-top: 4px; }
+    #selfie { max-width: 200px; border-radius: 6px; margin-top: 1rem; display: none; }
+  </style>
+</head>
+<body>
+  <h1>Paintmatch: dev test page</h1>
+  <p>Pick or take a selfie. The page shows each matching face crop with its full painting.</p>
+  <input id="file" type="file" accept="image/*" capture="user">
+  <p id="status"></p>
+  <img id="selfie" alt="your photo">
+  <div id="results"></div>
+  <script>
+    const fileInput = document.getElementById("file");
+    const status = document.getElementById("status");
+    const results = document.getElementById("results");
+    const selfie = document.getElementById("selfie");
+
+    // Phone photos are often 3–12 MB; the server only needs ~800px to find and embed the face.
+    // Shrinking before upload makes the request much faster on mobile networks.
+    const UPLOAD_MAX_SIDE = 800;
+
+    async function shrinkForUpload(file) {
+      try {
+        // "from-image" applies the EXIF rotation so the face isn't sideways.
+        const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+        const scale = Math.min(1, UPLOAD_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(bitmap.width * scale);
+        canvas.height = Math.round(bitmap.height * scale);
+        canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+        return blob && blob.size < file.size ? blob : file;
+      } catch {
+        return file; // formats the browser can't decode (e.g. HEIC outside Safari): let the server try
+      }
+    }
+
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      selfie.src = URL.createObjectURL(file);
+      selfie.style.display = "block";
+      results.innerHTML = "";
+      status.textContent = "Matching…";
+      const upload = await shrinkForUpload(file);
+      const body = new FormData();
+      body.append("file", upload, upload === file ? file.name : "selfie.jpg");
+      const res = await fetch("/match?k=12", { method: "POST", body });
+      const json = await res.json();
+      if (!res.ok) { status.textContent = json.detail || "Error"; return; }
+      status.textContent = "";
+      for (const m of json.matches) {
+        const fig = document.createElement("figure");
+        fig.innerHTML = `<a href="${m.thumb_url}" target="_blank"><img src="${m.crop_url}" alt=""></a>
+                         <figcaption>similarity ${m.score.toFixed(3)}</figcaption>`;
+        results.appendChild(fig);
+      }
+    });
+  </script>
+</body>
+</html>
