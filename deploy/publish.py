@@ -74,6 +74,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--project", help="Google Cloud project (default: gcloud's configured project)")
     # Caps how far Cloud Run can scale, and therefore the worst-case bill.
     p.add_argument("--max-instances", type=int, default=3)
+    # With DINOv2 blending, 1 vCPU took ~3 s per match vs ~1.3 s on 2. Per-match cost is similar,
+    # since billing is per vCPU-second and matches finish ~2x faster.
+    p.add_argument("--cpu", type=int, default=2)
     return p.parse_args()
 
 
@@ -90,7 +93,7 @@ def run_deploy_command(args: argparse.Namespace, source: Path) -> list[str]:
         "--region", args.region,
         "--allow-unauthenticated",   # a public API, called from the browser
         "--memory", "2Gi",           # ~0.6 GB in use; headroom for concurrent requests
-        "--cpu", "1",
+        "--cpu", str(args.cpu),
         "--cpu-boost",               # extra CPU while starting, to shorten cold starts
         "--concurrency", "20",       # matches are quick, and image requests are cheap
         "--min-instances", "0",      # scale to zero when idle: free, at the cost of cold starts

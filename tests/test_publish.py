@@ -78,12 +78,13 @@ def test_cloud_run_command(tmp_path):
 
     from publish import run_deploy_command
 
-    args = argparse.Namespace(service="svc", region="us-central1", project="proj-1", max_instances=3,
+    args = argparse.Namespace(service="svc", region="us-central1", project="proj-1", max_instances=3, cpu=2,
                               allowed_origins="https://a.example,https://b.example")
     cmd = run_deploy_command(args, tmp_path)
     assert cmd[:4] == ["gcloud", "run", "deploy", "svc"]
     assert cmd[cmd.index("--source") + 1] == str(tmp_path)
     assert cmd[cmd.index("--max-instances") + 1] == "3"
+    assert cmd[cmd.index("--cpu") + 1] == "2"
     assert cmd[cmd.index("--min-instances") + 1] == "0"
     assert "--allow-unauthenticated" in cmd
     # Custom delimiter, so the comma-separated origins stay one value.

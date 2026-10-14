@@ -162,7 +162,7 @@ uv run deploy/publish.py cloudrun
 
 Cloud Build builds `deploy/Dockerfile` on Google's servers, pinned to the assets dataset's
 current commit, and deploys it with these settings:
-- 2 GiB of RAM and 1 CPU
+- 2 GiB of RAM and 2 vCPUs (with 1 vCPU, blended matching took ~3 s instead of ~1.3 s)
 - scales to zero when idle, with at most 3 instances
 - CORS allows `https://twin.maxaltman.com`
 
