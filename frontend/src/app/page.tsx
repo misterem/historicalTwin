@@ -12,7 +12,7 @@ export default function Home() {
 
       <footer className="footer">
         <p>Your photo is analyzed in memory and never stored.</p>
-        <p>Portraits from WikiArt.</p>
+        <p>Portraits from WikiArt, The Met and the Smithsonian.</p>
       </footer>
     </main>
   );
