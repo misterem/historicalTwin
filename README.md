@@ -100,6 +100,12 @@ judge them blind.
   result is cached in `data/reviews/_cache/`.
 - `--variants arcface,blend` picks a subset, and `--alpha` sets ArcFace's weight in the
   blend (default 0.3, the production setting).
+- Experimental variants `blend-tight`, `blend-skin` and `blend-tight-skin` try DINOv2 on a
+  tighter face crop and a skin-tone term. Build their features first with
+  `uv run evaluation/face_features.py`. In a blind review the skin-tone term didn't help
+  (in paintings it mostly measures varnish and lighting), and the tight crop was only
+  slightly preferred.
+- "Copy picks" copies your picks as JSON, to share or save them.
 
 ## Run the backend
 

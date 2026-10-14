@@ -9,6 +9,11 @@ Variants:
   arcface-det320  the same with detector input 320 (~1.7x faster API)
   dinov2          DINOv2 appearance similarity of the face crop (hair, colors, pose)
   blend           alpha * arcface + (1 - alpha) * dinov2, each z-scored per photo
+  blend-tight     the blend with DINOv2 on a tighter face crop (less hair, background, clothes)
+  blend-skin      the blend plus --skin-weight * skin-tone closeness (ITA, see face_features.py)
+  blend-tight-skin  both
+
+The last three need the feature cache from evaluation/face_features.py.
 
 The page embeds small crops of your photos' faces and lives under data/ (gitignored).
 Don't publish it.
@@ -28,10 +33,13 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
 
 from paintmatch.appearance import CROP_SIZE, AppearanceEmbedder, embed_crops
 from paintmatch.faces import FaceEmbedder, face_crop, load_image
-from paintmatch.index import DEFAULT_ARCFACE_WEIGHT, FaceIndex, blend_scores, crop_name, thumb_name
+from paintmatch.index import DEFAULT_ARCFACE_WEIGHT, FaceIndex, blend_scores, crop_name, thumb_name, zscore
+
+from face_features import TIGHT_MARGIN, ita, load_features, skin_lab
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = Path(__file__).resolve().parent / "report_template.html"
@@ -41,7 +49,19 @@ VARIANTS = {
     "arcface-det320": "ArcFace, detector 320",
     "dinov2": "DINOv2 appearance",
     "blend": "Blend: ArcFace + DINOv2 (production)",
+    "blend-tight": "Blend, tight DINOv2 crop",
+    "blend-skin": "Blend + skin tone",
+    "blend-tight-skin": "Blend, tight DINOv2 crop + skin tone",
 }
+DEFAULT_SKIN_WEIGHT = 0.5
+
+
+def skin_closeness(query_ita: float, painting_ita: np.ndarray) -> np.ndarray:
+    """z-scored closeness of skin tone; 0 (neutral) where either side has no reading."""
+    if np.isnan(query_ita):
+        return np.zeros(len(painting_ita), np.float32)
+    closeness = -np.abs(painting_ita - query_ita)
+    return np.nan_to_num(zscore(np.where(np.isnan(closeness), np.nanmean(closeness), closeness)))
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,6 +70,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--data-dir", type=Path, default=REPO_ROOT / "data")
     p.add_argument("--variants", default=",".join(VARIANTS), help=f"comma-separated subset of: {', '.join(VARIANTS)}")
     p.add_argument("--alpha", type=float, default=DEFAULT_ARCFACE_WEIGHT, help="ArcFace weight in the blend (0-1)")
+    p.add_argument("--skin-weight", type=float, default=DEFAULT_SKIN_WEIGHT, help="skin-tone weight in the *-skin variants")
     p.add_argument("--k", type=int, default=5, help="matches shown per variant")
     p.add_argument("--out", type=Path, help="output folder (default: data/reviews/<photos>-<timestamp>)")
     return p.parse_args()
@@ -66,7 +87,8 @@ def main() -> None:
     variants = [v.strip() for v in args.variants.split(",") if v.strip()]
     if unknown := set(variants) - set(VARIANTS):
         sys.exit(f"unknown variants: {', '.join(sorted(unknown))}")
-    needs_dinov2 = bool({"dinov2", "blend"} & set(variants))
+    needs_dinov2 = any(v.startswith(("dinov2", "blend")) for v in variants)
+    needs_features = any(v.startswith("blend-") for v in variants)
 
     photos = sorted(p for p in args.photos.rglob("*") if p.suffix.lower() in PHOTO_SUFFIXES)
     if not photos:
@@ -93,6 +115,9 @@ def main() -> None:
             index.appearance if index.has_appearance
             else embed_crops(appearance, crop_paths, args.data_dir / "cache" / "appearance-dinov2-small.npz")
         )
+
+    features = load_features(args.data_dir, index) if needs_features else None
+    painting_ita = ita(features["lab"]) if features else None
 
     def to_entry(match: dict) -> dict:
         caption = " · ".join(str(match[k]) for k in ("title", "artist", "year") if match.get(k))
@@ -123,6 +148,9 @@ def main() -> None:
         dino = None
         if needs_dinov2:
             dino = painting_appearance @ appearance.embed([face_crop(rgb, face.bbox, CROP_SIZE)])[0]
+        if needs_features:
+            tight = features["tight"] @ appearance.embed([face_crop(rgb, face.bbox, CROP_SIZE, margin=TIGHT_MARGIN)])[0]
+            skin = skin_closeness(float(ita(skin_lab(rgb, face.bbox))), painting_ita)
 
         for variant in variants:
             if variant == "arcface":
@@ -136,7 +164,9 @@ def main() -> None:
             elif variant == "dinov2":
                 scores = dino
             else:
-                scores = blend_scores(arcface, dino, args.alpha)
+                scores = blend_scores(arcface, tight if "tight" in variant else dino, args.alpha)
+                if variant.endswith("-skin"):
+                    scores = scores + args.skin_weight * skin
             entry["results"][variant] = [to_entry(m) for m in index.rank(scores, k=args.k)]
         print(f"  {photo.name}: ok")
 
@@ -145,7 +175,8 @@ def main() -> None:
         "created": time.strftime("%Y-%m-%d %H:%M"),
         "alpha": args.alpha,
         "paintingFaces": len(index),
-        "variants": [{"id": v, "label": VARIANTS[v] + (f" (α={args.alpha})" if v == "blend" else "")} for v in variants],
+        "variants": [{"id": v, "label": VARIANTS[v] + (f" (α={args.alpha})" if v.startswith("blend") else "")
+                     + (f" (skin {args.skin_weight})" if v.endswith("-skin") else "")} for v in variants],
         "photos": entries,
     }
     payload = json.dumps(data).replace("</", "<\\/")
