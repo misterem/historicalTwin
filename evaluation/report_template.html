@@ -67,6 +67,7 @@
   <div class="bar">
     <span class="progress" id="progress"></span>
     <button type="button" id="reveal" aria-pressed="false">Reveal variants</button>
+    <button type="button" id="copy">Copy picks</button>
     <button type="button" id="reset">Clear picks</button>
   </div>
   <section id="tally" hidden></section>
@@ -179,6 +180,16 @@
   }
 
   document.getElementById("reveal").addEventListener("click", () => { revealed = !revealed; render(); });
+  // Picks live in this browser's localStorage; this hands them over as JSON (review id included).
+  document.getElementById("copy").addEventListener("click", async (event) => {
+    const text = JSON.stringify({ review: data.id, picks });
+    try {
+      await navigator.clipboard.writeText(text);
+      event.target.textContent = `Copied ${Object.keys(picks).length} picks`;
+    } catch {
+      prompt("Copy these picks:", text);
+    }
+  });
   document.getElementById("reset").addEventListener("click", () => {
     if (confirm("Clear all picks for this review?")) { picks = {}; save(); render(); }
   });
