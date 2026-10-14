@@ -60,6 +60,21 @@ uv run indexing/build_metadata.py   # writes data/index/paintings.json
 
 Run it after `build_index.py` has downloaded the images, and restart the API afterwards.
 
+## Add appearance embeddings
+
+Matching blends two similarities. **ArcFace** measures facial identity, and **DINOv2**
+measures overall look: hair, coloring, pose and age. In a blind review of 28 portraits,
+results that used DINOv2 were preferred about 2 to 1 over ArcFace alone, while ArcFace
+still found the actual person when they had been painted. The blend weights ArcFace 0.3
+and DINOv2 0.7 (`PAINTMATCH_ARCFACE_WEIGHT`).
+
+```bash
+uv run indexing/build_appearance.py   # writes data/index/appearance.npz
+```
+
+Run it after `build_index.py`. Embeddings are cached per face crop, so re-runs are fast.
+Without the file, the API falls back to ArcFace alone.
+
 ## Review match quality
 
 Put 20–30 photos of different people in a folder, then build a side-by-side review page:
@@ -84,7 +99,7 @@ judge them blind.
 - The first run embeds every painting face with DINOv2, which takes about 10 minutes. The
   result is cached in `data/reviews/_cache/`.
 - `--variants arcface,blend` picks a subset, and `--alpha` sets ArcFace's weight in the
-  blend (default 0.7).
+  blend (default 0.3, the production setting).
 
 ## Run the backend
 
@@ -147,7 +162,7 @@ uv run deploy/publish.py cloudrun
 
 Cloud Build builds `deploy/Dockerfile` on Google's servers, pinned to the assets dataset's
 current commit, and deploys it with these settings:
-- 2 GiB of RAM and 1 CPU
+- 2 GiB of RAM and 2 vCPUs (with 1 vCPU, blended matching took ~3 s instead of ~1.3 s)
 - scales to zero when idle, with at most 3 instances
 - CORS allows `https://twin.maxaltman.com`
 
@@ -182,6 +197,7 @@ The root `Dockerfile` builds an API image that leaves the images out, to pair wi
 | `PAINTMATCH_IMAGE_BASE_URL` | public URL of the image bucket (required in that image) |
 | `PAINTMATCH_ALLOWED_ORIGINS` | comma-separated site origins allowed by CORS |
 | `PAINTMATCH_SELFIE_DET_SIZE` | `640` (default) or `320`: about 1.7x faster, scores shift slightly |
+| `PAINTMATCH_ARCFACE_WEIGHT` | ArcFace's share of the blended score, `0.3` by default; `1.0` means ArcFace only |
 | `PORT` | set by the host; defaults to 8080 |
 
 ## Licensing note

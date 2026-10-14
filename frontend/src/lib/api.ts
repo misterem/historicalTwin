@@ -10,7 +10,11 @@ export type Match = Box & {
   det_score: number;
   face_px: number;
   face_id: number;
-  score: number; // cosine similarity
+  // Ranking score: a blend of standardized ArcFace and DINOv2 similarities. Higher is better,
+  // but it isn't a percentage or comparable across photos, so the UI shows ranks instead.
+  score: number;
+  arcface_score?: number; // raw cosine similarities, for debugging
+  appearance_score?: number;
   thumb_url: string;
   crop_url: string;
   // Not returned by the API yet: the dataset has no painting metadata.

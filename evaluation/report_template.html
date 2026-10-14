@@ -128,7 +128,7 @@
         card.append(el("p", { class: "error" }, photo.error));
         return card;
       }
-      const order = shuffled(data.variants.map(v => v.id), photo.name);
+      const order = shuffled(data.variants.map(v => v.id), data.id + photo.name); // new order per report
       order.forEach((variant, i) => {
         const matches = photo.results[variant];
         const picked = picks[photo.name] === variant;

@@ -9,6 +9,7 @@ def make_data(tmp_path):
     (data / "index").mkdir(parents=True)
     (data / "index" / "index.npz").write_bytes(b"npz")
     (data / "index" / "paintings.json").write_text("{}")
+    (data / "index" / "appearance.npz").write_bytes(b"appearance")
     for folder, names in {"thumbs": ["cd34.jpg", "ab12.jpg"], "crops": ["ab12_0.jpg", "ab12_1.jpg"]}.items():
         (data / folder).mkdir()
         for name in names:
@@ -21,7 +22,8 @@ def test_stage_assets_packs_images_into_archives(tmp_path):
     stage = data / ".publish-assets"
     assert stage_assets(data, stage) == {"thumbs": 2, "crops": 2}
     staged = sorted(str(p.relative_to(stage)) for p in stage.rglob("*") if p.is_file())
-    assert staged == ["images/crops.tar", "images/thumbs.tar", "index/index.npz", "index/paintings.json"]
+    assert staged == ["images/crops.tar", "images/thumbs.tar", "index/appearance.npz", "index/index.npz",
+                      "index/paintings.json"]
     # Index files are hard links, not copies.
     assert (stage / "index/index.npz").stat().st_ino == (data / "index/index.npz").stat().st_ino
     # Archives unpack to the flat paths the app serves, sorted, with the original bytes.
@@ -76,12 +78,13 @@ def test_cloud_run_command(tmp_path):
 
     from publish import run_deploy_command
 
-    args = argparse.Namespace(service="svc", region="us-central1", project="proj-1", max_instances=3,
+    args = argparse.Namespace(service="svc", region="us-central1", project="proj-1", max_instances=3, cpu=2,
                               allowed_origins="https://a.example,https://b.example")
     cmd = run_deploy_command(args, tmp_path)
     assert cmd[:4] == ["gcloud", "run", "deploy", "svc"]
     assert cmd[cmd.index("--source") + 1] == str(tmp_path)
     assert cmd[cmd.index("--max-instances") + 1] == "3"
+    assert cmd[cmd.index("--cpu") + 1] == "2"
     assert cmd[cmd.index("--min-instances") + 1] == "0"
     assert "--allow-unauthenticated" in cmd
     # Custom delimiter, so the comma-separated origins stay one value.

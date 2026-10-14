@@ -28,13 +28,10 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from appearance import AppearanceEmbedder, embed_crops  # noqa: E402
-
-from paintmatch.faces import FaceEmbedder, face_crop, load_image  # noqa: E402
-from paintmatch.index import FaceIndex, crop_name, thumb_name  # noqa: E402
+from paintmatch.appearance import CROP_SIZE, AppearanceEmbedder, embed_crops
+from paintmatch.faces import FaceEmbedder, face_crop, load_image
+from paintmatch.index import DEFAULT_ARCFACE_WEIGHT, FaceIndex, blend_scores, crop_name, thumb_name
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = Path(__file__).resolve().parent / "report_template.html"
@@ -43,7 +40,7 @@ VARIANTS = {
     "arcface": "ArcFace, detector 640 (current)",
     "arcface-det320": "ArcFace, detector 320",
     "dinov2": "DINOv2 appearance",
-    "blend": "Blend: ArcFace + DINOv2",
+    "blend": "Blend: ArcFace + DINOv2 (production)",
 }
 
 
@@ -52,14 +49,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("photos", type=Path, help="folder of selfies / photos of people")
     p.add_argument("--data-dir", type=Path, default=REPO_ROOT / "data")
     p.add_argument("--variants", default=",".join(VARIANTS), help=f"comma-separated subset of: {', '.join(VARIANTS)}")
-    p.add_argument("--alpha", type=float, default=0.7, help="ArcFace weight in the blend (0-1)")
+    p.add_argument("--alpha", type=float, default=DEFAULT_ARCFACE_WEIGHT, help="ArcFace weight in the blend (0-1)")
     p.add_argument("--k", type=int, default=5, help="matches shown per variant")
     p.add_argument("--out", type=Path, help="output folder (default: data/reviews/<photos>-<timestamp>)")
     return p.parse_args()
-
-
-def zscore(v: np.ndarray) -> np.ndarray:
-    return (v - v.mean()) / (v.std() + 1e-8)
 
 
 def jpeg_data_uri(image, quality: int = 85) -> str:
@@ -96,7 +89,10 @@ def main() -> None:
             crops_dir / crop_name(image_id, int(face_idx))
             for image_id, face_idx in zip(index.faces["image_id"].tolist(), index.faces["face_idx"].tolist())
         ]
-        painting_appearance = embed_crops(appearance, crop_paths, args.data_dir / "reviews" / "_cache" / "dinov2-small.npz")
+        painting_appearance = (
+            index.appearance if index.has_appearance
+            else embed_crops(appearance, crop_paths, args.data_dir / "cache" / "appearance-dinov2-small.npz")
+        )
 
     def to_entry(match: dict) -> dict:
         caption = " · ".join(str(match[k]) for k in ("title", "artist", "year") if match.get(k))
@@ -126,7 +122,7 @@ def main() -> None:
         arcface = index.embeddings @ face.embedding
         dino = None
         if needs_dinov2:
-            dino = painting_appearance @ appearance.embed([face_crop(rgb, face.bbox, 224)])[0]
+            dino = painting_appearance @ appearance.embed([face_crop(rgb, face.bbox, CROP_SIZE)])[0]
 
         for variant in variants:
             if variant == "arcface":
@@ -140,7 +136,7 @@ def main() -> None:
             elif variant == "dinov2":
                 scores = dino
             else:
-                scores = args.alpha * zscore(arcface) + (1 - args.alpha) * zscore(dino)
+                scores = blend_scores(arcface, dino, args.alpha)
             entry["results"][variant] = [to_entry(m) for m in index.rank(scores, k=args.k)]
         print(f"  {photo.name}: ok")
 

@@ -1,6 +1,10 @@
 """DINOv2 "appearance" embeddings of face crops: overall look (hair, colors, pose,
-lighting), as opposed to ArcFace's identity features. Evaluation-only for now; it moves
-into src/paintmatch if a blended score wins the match-quality review.
+lighting), as opposed to ArcFace's identity features.
+
+Matching blends the two (see FaceIndex.search). In a blind review of 28 portraits,
+rows using DINOv2 were preferred ~2:1 over ArcFace alone, while ArcFace still won when
+the actual person had been painted. Paintings and selfies are both embedded from a
+face_crop(..., size=CROP_SIZE) with the default margin, so they're framed alike.
 
 DINOv2 is Apache-2.0 licensed, so unlike the InsightFace weights it's usable commercially.
 """
@@ -14,6 +18,8 @@ from PIL import Image
 
 REPO_ID = "onnx-community/dinov2-small"
 REVISION = "8b1f705a3a7f6f062f6bdd21986c1583d3ef105d"
+# Stored next to painting embeddings, so a model change can't silently mix incompatible vectors.
+MODEL_ID = f"{REPO_ID}@{REVISION}"
 DIM = 384
 
 # From the model's preprocessor_config.json (BitImageProcessor).

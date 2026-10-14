@@ -65,7 +65,7 @@
       for (const m of json.matches) {
         const fig = document.createElement("figure");
         fig.innerHTML = `<a href="${m.thumb_url}" target="_blank"><img src="${m.crop_url}" alt=""></a>
-                         <figcaption>similarity ${m.score.toFixed(3)}</figcaption>`;
+                         <figcaption>#${json.matches.indexOf(m) + 1} · arcface ${m.arcface_score.toFixed(2)}${m.appearance_score != null ? ` · appearance ${m.appearance_score.toFixed(2)}` : ""}</figcaption>`;
         results.appendChild(fig);
       }
     });
