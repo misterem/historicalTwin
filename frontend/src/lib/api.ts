@@ -17,10 +17,13 @@ export type Match = Box & {
   appearance_score?: number;
   thumb_url: string;
   crop_url: string;
-  // Not returned by the API yet: the dataset has no painting metadata.
+  // Painting metadata, when known (about 3/4 of paintings).
   title?: string;
   artist?: string;
   year?: string;
+  // Only for paintings from museum open-access collections: the museum and the work's page there.
+  museum?: string;
+  url?: string;
 };
 
 export type MatchResponse = { selfie_face: Box; matches: Match[] };

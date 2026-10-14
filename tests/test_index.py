@@ -81,13 +81,17 @@ def test_painting_metadata_merged_when_present(data_dir):
     (data_dir / "index" / PAINTINGS_FILE).write_text(json.dumps({
         "aaa": {"artist": "Rembrandt", "title": "Flora", "year": "1634", "source": "x.jpg", "phash_bits": 0},
         "bbb": {"artist": "Ilya Repin", "title": None, "year": None, "source": "y.jpg", "phash_bits": 2},
+        "ccc": {"artist": "Gilbert Stuart", "title": "George Washington", "year": "1795",
+                "museum": "National Portrait Gallery", "url": "https://npg.si.edu/object/x", "credit": "Gift", "license": "CC0"},
     }))
     index = FaceIndex(data_dir / "index")
     by_id = {r["image_id"]: r for r in index.search(embedding_for(0), k=10)}
     assert {k: by_id["aaa"][k] for k in ("artist", "title", "year")} == {"artist": "Rembrandt", "title": "Flora", "year": "1634"}
     assert by_id["bbb"]["artist"] == "Ilya Repin" and "title" not in by_id["bbb"] and "year" not in by_id["bbb"]
-    assert "artist" not in by_id["ccc"]
+    assert "museum" not in by_id["aaa"]
+    assert (by_id["ccc"]["museum"], by_id["ccc"]["url"]) == ("National Portrait Gallery", "https://npg.si.edu/object/x")
     assert "source" not in by_id["aaa"] and "phash_bits" not in by_id["aaa"]  # internal fields stay internal
+    assert "credit" not in by_id["ccc"] and "license" not in by_id["ccc"]
 
 
 def test_no_metadata_file_is_fine(data_dir):

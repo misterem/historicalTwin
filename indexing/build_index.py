@@ -9,6 +9,8 @@ paintings that are already indexed (paintings that failed are retried).
 
     uv run indexing/build_index.py --limit 200   # quick smoke test
     uv run indexing/build_index.py               # full dataset
+
+Museum paintings fetched by fetch_museums.py into <data-dir>/raw/museums/ are indexed too.
 """
 
 from __future__ import annotations
@@ -30,6 +32,9 @@ from paintmatch.faces import EMBEDDING_DIM, FaceEmbedder, face_crop, load_image
 from paintmatch.index import INDEX_FILE, columns_to_rows, crop_name, load_index, save_index, thumb_name
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# Folder under <data-dir>/raw for fetch_museums.py's images. Their image_ids are
+# source-prefixed ("met-436532"), so they can't collide with the dataset's content hashes.
+MUSEUM_DIR = "museums"
 
 # The dataset is our own and trusted; some museum scans exceed PIL's default
 # decompression-bomb limit.
@@ -70,6 +75,11 @@ def list_images(args: argparse.Namespace, raw_dir: Path) -> list[str]:
         repo_files = HfApi().list_repo_files(args.repo_id, repo_type="dataset")
         paths = sorted(f for f in repo_files if f.startswith("images/") and f.lower().endswith(".jpg"))
     return paths[: args.limit] if args.limit else paths
+
+
+def museum_images(raw_dir: Path) -> list[str]:
+    """Raw-dir-relative paths of the museum paintings fetched by fetch_museums.py."""
+    return sorted(p.relative_to(raw_dir).as_posix() for p in (raw_dir / MUSEUM_DIR).glob("*.jpg"))
 
 
 def download(args: argparse.Namespace, raw_dir: Path, paths: list[str]) -> list[str]:
@@ -119,6 +129,9 @@ def main() -> None:
     paths = list_images(args, raw_dir)
     if not args.skip_download:
         paths = download(args, raw_dir, paths)
+    paths += museum_images(raw_dir)
+    if args.limit:
+        paths = paths[: args.limit]
     print(f"{len(paths)} paintings to consider")
 
     # Resume from a previous run. Paintings that errored are dropped so they get retried.

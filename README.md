@@ -47,6 +47,23 @@ uv run indexing/build_index.py               # all 15k paintings
   and pass `--providers CUDAExecutionProvider CPUExecutionProvider`.
 - Run `hf auth login` first if downloads get rate-limited.
 
+## Add museum portraits
+
+The WikiArt set is mostly European. To broaden it, `fetch_museums.py` adds public-domain
+(CC0) portrait paintings from the Met, the Smithsonian's National Portrait Gallery and the
+Smithsonian American Art Museum, about 3,500 objects:
+
+```bash
+uv run indexing/fetch_museums.py     # ~1 hour, mostly the Met's 1-request-per-second API limit
+uv run indexing/build_index.py       # indexes only the new paintings
+uv run indexing/build_metadata.py    # captions, plus a link to each museum's page
+uv run indexing/build_appearance.py
+```
+
+- It downloads the museums' catalogs (~650 MB) into `data/sources/` on the first run.
+- Paintings already in the WikiArt set are skipped, by perceptual hash.
+- Images and a `manifest.json` go to `data/raw/museums/`. The run is resumable.
+
 ## Add painting metadata
 
 The dataset only has hashed filenames. This step looks each painting up in the

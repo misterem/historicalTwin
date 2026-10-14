@@ -9,6 +9,9 @@ and has the same aspect ratio. In testing, matches at <= 4 bits were always the
 same painting and matches at >= 6 bits never were. Unmatched paintings simply get
 no metadata, which is better than a wrong attribution.
 
+Museum paintings (fetch_museums.py) bring their own metadata: their manifest entries are
+copied in as they are, with the museum, a link to its page and the credit line.
+
 Writes <data-dir>/index/paintings.json, which the backend merges into results.
 Re-run it after build_index.py downloads new images; it doesn't touch the face index.
 
@@ -32,7 +35,12 @@ import numpy as np
 from PIL import Image
 from tqdm.contrib.concurrent import thread_map
 
+from build_index import MUSEUM_DIR
 from paintmatch.index import PAINTINGS_FILE
+
+# Written by fetch_museums.py; relative to the data dir.
+MUSEUM_MANIFEST = Path("raw") / MUSEUM_DIR / "manifest.json"
+MUSEUM_FIELDS = ("artist", "title", "year", "museum", "url", "credit", "license")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLASSES_CSV_URL = "https://www.kaggle.com/api/v1/datasets/download/steubk/wikiart/classes.csv"
@@ -113,6 +121,21 @@ def fingerprint(path: Path) -> tuple[int, float] | None:
         return None
 
 
+def museum_metadata(data_dir: Path) -> dict[str, dict]:
+    """Metadata for the museum paintings fetched by fetch_museums.py (none if it hasn't run)."""
+    path = data_dir / MUSEUM_MANIFEST
+    if not path.exists():
+        return {}
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    out = {}
+    for image_id, entry in manifest.items():
+        if entry["status"] == "ok":
+            out[image_id] = {k: entry.get(k) for k in MUSEUM_FIELDS}
+            if (out[image_id]["url"] or "").startswith("http://"):  # the Met's CSV still links over http
+                out[image_id]["url"] = "https://" + out[image_id]["url"][len("http://"):]
+    return out
+
+
 def main() -> None:
     args = parse_args()
     rows = load_reference(args.data_dir)
@@ -150,6 +173,9 @@ def main() -> None:
             "phash_bits": int(dist[best]),
         }
 
+    museums = museum_metadata(args.data_dir)
+    paintings |= museums
+
     out = args.data_dir / "index" / PAINTINGS_FILE
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(f".{out.name}.tmp")
@@ -158,7 +184,8 @@ def main() -> None:
 
     n = len(images)
     print(
-        f"\nmatched {len(paintings)}/{n} paintings ({len(paintings) / max(n, 1):.1%}) -> {out}\n"
+        f"\nmatched {len(paintings) - len(museums)}/{n} WikiArt paintings "
+        f"({(len(paintings) - len(museums)) / max(n, 1):.1%}), plus {len(museums)} museum paintings -> {out}\n"
         f"  no close match:     {n_far}\n"
         f"  aspect mismatch:    {n_aspect}\n"
         f"  unreadable:         {n_unreadable}"

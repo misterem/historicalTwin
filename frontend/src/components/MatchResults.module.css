@@ -66,6 +66,17 @@
   text-align: center;
 }
 
+.credit {
+  margin: -8px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.credit a {
+  color: inherit;
+}
+
 .subheading {
   margin: 12px 0 0;
   font-family: var(--font-display);

@@ -67,3 +67,15 @@ def test_prefetch_keeps_order_and_surfaces_errors():
     assert [item for item, _, _ in results] == list(range(6))
     assert [r for _, r, e in results if e is None] == [0, 10, 20, 40, 50]
     assert isinstance(results[3][2], ValueError)
+
+
+def test_museum_images_are_indexed_too(monkeypatch, tmp_path, raw_dir):
+    museums = tmp_path / "raw" / build_index.MUSEUM_DIR
+    museums.mkdir()
+    (museums / "met-1.jpg").write_bytes(photo_bytes(red=40, fmt="JPEG"))
+    (museums / "manifest.json").write_text("{}")  # not an image
+    _, faces, images = run_indexer(monkeypatch, tmp_path)
+    paths = dict(zip(images["image_id"].tolist(), images["image_path"].tolist()))
+    assert paths["met-1"] == "museums/met-1.jpg"
+    assert "met-1" in faces["image_id"].tolist()
+    assert (tmp_path / "crops" / "met-1_0.jpg").exists()
