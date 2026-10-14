@@ -43,6 +43,17 @@ export default function MatchResults({ selfieFace, matches, onReset }: Props) {
         <img src={match.thumb_url} alt="The full painting" />
       </a>
       {caption(match) && <p className={styles.caption}>{caption(match)}</p>}
+      {match.museum && (
+        <p className={styles.credit}>
+          {match.url ? (
+            <a href={match.url} target="_blank" rel="noreferrer">
+              {match.museum}
+            </a>
+          ) : (
+            match.museum
+          )}
+        </p>
+      )}
 
       {matches.length > 1 && (
         <>

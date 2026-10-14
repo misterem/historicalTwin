@@ -33,7 +33,8 @@ INDEX_FILE = "index.npz"
 # Optional painting metadata from indexing/build_metadata.py: {image_id: {artist, title, year, ...}}.
 # Only ~3/4 of paintings have an entry; the rest are returned without these fields.
 PAINTINGS_FILE = "paintings.json"
-PAINTING_FIELDS = ("artist", "title", "year")
+# museum/url only exist for paintings from museum open-access collections (fetch_museums.py).
+PAINTING_FIELDS = ("artist", "title", "year", "museum", "url")
 APPEARANCE_FILE = "appearance.npz"
 # Weight of ArcFace (identity) vs DINOv2 (appearance) in the blended score. Chosen from a blind
 # review where appearance-led rows won ~2:1; ArcFace keeps "this painting is actually you" hits.
