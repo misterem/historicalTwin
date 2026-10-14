@@ -17,8 +17,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, UnidentifiedImageError
 
-from paintmatch.faces import FaceEmbedder, load_image
-from paintmatch.index import FaceIndex, crop_name, thumb_name
+from paintmatch.appearance import CROP_SIZE, AppearanceEmbedder
+from paintmatch.faces import FaceEmbedder, face_crop, load_image
+from paintmatch.index import DEFAULT_ARCFACE_WEIGHT, FaceIndex, crop_name, thumb_name
 
 DATA_DIR = Path(os.environ.get("PAINTMATCH_DATA_DIR", Path(__file__).resolve().parents[1] / "data"))
 # Public base URL of the thumbs/ and crops/ folders (e.g. the R2 bucket's domain).
@@ -31,6 +32,8 @@ SELFIE_MAX_SIDE = 1280
 # Detector input size for selfies. 320 is ~1.7x faster than 640 but landmarks are a bit
 # less precise, which shifts similarity scores slightly (0.975 -> 0.948 on a self-match).
 SELFIE_DET_SIZE = int(os.environ.get("PAINTMATCH_SELFIE_DET_SIZE", "640"))
+# ArcFace (identity) vs DINOv2 (appearance) weight; only used when the index has appearance embeddings.
+ARCFACE_WEIGHT = float(os.environ.get("PAINTMATCH_ARCFACE_WEIGHT", str(DEFAULT_ARCFACE_WEIGHT)))
 
 state: dict = {}
 
@@ -48,6 +51,7 @@ class CachedStaticFiles(StaticFiles):
 async def lifespan(_: FastAPI):
     state["embedder"] = FaceEmbedder(det_size=SELFIE_DET_SIZE)
     state["index"] = FaceIndex(DATA_DIR / "index")
+    state["appearance"] = AppearanceEmbedder() if state["index"].has_appearance else None
     yield
     state.clear()
 
@@ -59,7 +63,11 @@ if ALLOWED_ORIGINS:
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": True, "faces_indexed": len(state["index"])}
+    return {
+        "ok": True,
+        "faces_indexed": len(state["index"]),
+        "matching": "blend" if state["appearance"] is not None else "arcface",
+    }
 
 
 @app.post("/match")
@@ -79,7 +87,13 @@ def match(file: UploadFile, k: int = 6) -> dict:
 
     h, w = rgb.shape[:2]
     x1, y1, x2, y2 = selfie.bbox.tolist()
-    matches = state["index"].search(selfie.embedding, k=max(1, min(k, 50)))
+    appearance_query = None
+    if state["appearance"] is not None:
+        # Same framing as the painting crops the index was built from.
+        appearance_query = state["appearance"].embed([face_crop(rgb, selfie.bbox, CROP_SIZE)])[0]
+    matches = state["index"].search(
+        selfie.embedding, k=max(1, min(k, 50)), appearance_query=appearance_query, arcface_weight=ARCFACE_WEIGHT
+    )
     return {
         "selfie_face": {"x1": x1 / w, "y1": y1 / h, "x2": x2 / w, "y2": y2 / h},
         "matches": [

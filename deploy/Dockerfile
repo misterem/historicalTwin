@@ -26,6 +26,11 @@ RUN .venv/bin/python -c "from paintmatch.faces import FaceEmbedder; FaceEmbedder
              /app/insightface/models/buffalo_l/2d106det.onnx \
              /app/insightface/models/buffalo_l/genderage.onnx
 
+# Bake in the DINOv2 appearance model (88 MB) so containers start without downloading it.
+# Its own HF cache keeps it apart from the assets download; xet's chunk cache isn't needed at runtime.
+RUN HF_HOME=/app/hf .venv/bin/python -c "from paintmatch.appearance import AppearanceEmbedder; AppearanceEmbedder()" \
+    && rm -rf /app/hf/xet
+
 # Face index + painting images, pinned to an exact dataset commit. Images come as two tar
 # archives (images/thumbs.tar, images/crops.tar) that unpack to thumbs/<id>.jpg and
 # crops/<id>_<n>.jpg: four large downloads instead of ~31k small ones.
@@ -45,12 +50,15 @@ WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/insightface /app/insightface
+COPY --from=builder /app/hf /app/hf
 COPY --from=builder /app/data /app/data
 COPY backend ./backend
 
 ENV PATH=/app/.venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PAINTMATCH_MODEL_ROOT=/app/insightface \
+    HF_HOME=/app/hf \
+    HF_HUB_OFFLINE=1 \
     PAINTMATCH_DATA_DIR=/app/data \
     PORT=8080
 

@@ -11,8 +11,9 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from paintmatch.appearance import DIM as APPEARANCE_DIM
 from paintmatch.faces import EMBEDDING_DIM, Face
-from paintmatch.index import save_index
+from paintmatch.index import load_index, save_appearance, save_index
 
 
 def unit(v: np.ndarray) -> np.ndarray:
@@ -21,6 +22,10 @@ def unit(v: np.ndarray) -> np.ndarray:
 
 def embedding_for(seed: int) -> np.ndarray:
     return unit(np.random.default_rng(seed).normal(size=EMBEDDING_DIM))
+
+
+def appearance_for(seed: int) -> np.ndarray:
+    return unit(np.random.default_rng(1000 + seed).normal(size=APPEARANCE_DIM))
 
 
 def face_row(image_id: str, face_idx: int = 0, det_score: float = 0.8) -> dict:
@@ -50,6 +55,27 @@ def data_dir(tmp_path: Path) -> Path:
     return tmp_path
 
 
+@pytest.fixture
+def data_dir_with_appearance(data_dir: Path) -> Path:
+    """data_dir plus appearance embeddings, ordered opposite to identity: face row i has
+    appearance_for(3 - i). So identity favors row i while appearance_for(j) favors row 3 - j."""
+    _, faces, _ = load_index(data_dir / "index")
+    save_appearance(data_dir / "index", np.stack([appearance_for(3 - i) for i in range(4)]),
+                    faces["image_id"].tolist(), faces["face_idx"].tolist())
+    return data_dir
+
+
+class FakeAppearanceEmbedder:
+    """Stands in for paintmatch.appearance.AppearanceEmbedder: a crop's blue channel picks
+    appearance_for(blue)."""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def embed(self, images) -> np.ndarray:
+        return np.stack([appearance_for(int(np.asarray(im.convert("RGB"))[0, 0, 2])) for im in images])
+
+
 class FakeEmbedder:
     """Stands in for paintmatch.faces.FaceEmbedder.
 
@@ -72,11 +98,13 @@ class FakeEmbedder:
         return [Face(bbox=bbox, det_score=0.9, embedding=embedding_for(red))]
 
 
-def photo_bytes(red: int = 0, face: bool = True, size: tuple[int, int] = (200, 160), fmt: str = "PNG") -> bytes:
-    """An image whose top-left pixel tells FakeEmbedder which face to "find" (PNG is lossless)."""
+def photo_bytes(red: int = 0, face: bool = True, size: tuple[int, int] = (200, 160), fmt: str = "PNG",
+                blue: int = 0) -> bytes:
+    """A solid-color image: red picks the identity FakeEmbedder "finds", blue picks the look
+    FakeAppearanceEmbedder sees, and dark green means no face. PNG keeps values exact."""
     import io
 
-    img = Image.new("RGB", size, (red, 255 if face else 0, 0))
+    img = Image.new("RGB", size, (red, 255 if face else 0, blue))
     buf = io.BytesIO()
     img.save(buf, fmt)
     return buf.getvalue()

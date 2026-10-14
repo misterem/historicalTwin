@@ -32,7 +32,7 @@ BUILD_FILES = ["pyproject.toml", "uv.lock", ".python-version", "src", "backend"]
 SITE_URL = "https://twin.maxaltman.com"
 # Google APIs the deploy uses: Cloud Run, plus Cloud Build and Artifact Registry for --source builds.
 GCP_SERVICES = ["run.googleapis.com", "cloudbuild.googleapis.com", "artifactregistry.googleapis.com"]
-INDEX_FILES = ["index/index.npz", "index/paintings.json"]
+INDEX_FILES = ["index/index.npz", "index/paintings.json", "index/appearance.npz"]
 IMAGE_DIRS = ["thumbs", "crops"]
 # Images are uploaded as one uncompressed tar per folder (images/thumbs.tar, images/crops.tar)
 # rather than ~31k separate files: Hugging Face allows at most 10,000 files per directory, and
@@ -115,6 +115,13 @@ def check_assets(data_dir: Path) -> None:
           f"({len(images['image_id'])} paintings seen, {n_errors} with errors)")
     if not (data_dir / "index" / "paintings.json").exists():
         sys.exit("data/index/paintings.json is missing: run indexing/build_metadata.py first")
+    from paintmatch.index import FaceIndex
+
+    try:  # also verifies appearance.npz matches this index and model
+        if not FaceIndex(data_dir / "index").has_appearance:
+            sys.exit("data/index/appearance.npz is missing: run indexing/build_appearance.py first")
+    except ValueError as e:
+        sys.exit(str(e))
     if missing_crops or missing_thumbs:
         sys.exit(f"missing {len(missing_crops)} crops and {len(missing_thumbs)} thumbnails: re-run build_index.py")
 

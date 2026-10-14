@@ -43,7 +43,6 @@ export default function MatchResults({ selfieFace, matches, onReset }: Props) {
         <img src={match.thumb_url} alt="The full painting" />
       </a>
       {caption(match) && <p className={styles.caption}>{caption(match)}</p>}
-      <p className={styles.score}>Similarity {match.score.toFixed(2)}</p>
 
       {matches.length > 1 && (
         <>
@@ -55,11 +54,11 @@ export default function MatchResults({ selfieFace, matches, onReset }: Props) {
                   type="button"
                   className={styles.thumb}
                   aria-pressed={i === selected}
-                  aria-label={`Show match ${i + 1}, similarity ${m.score.toFixed(2)}`}
+                  aria-label={`Show match ${i + 1}`}
                   onClick={() => setSelected(i)}
                 >
                   <img src={m.crop_url} alt="" loading="lazy" />
-                  <span>{m.score.toFixed(2)}</span>
+                  <span>#{i + 1}</span>
                 </button>
               </li>
             ))}

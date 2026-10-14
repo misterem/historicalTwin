@@ -7,9 +7,10 @@ from fastapi.testclient import TestClient
 
 from paintmatch.index import PAINTINGS_FILE
 
-from conftest import FakeEmbedder, photo_bytes
+from conftest import FakeAppearanceEmbedder, FakeEmbedder, photo_bytes
 
-ENV_VARS = ("PAINTMATCH_IMAGE_BASE_URL", "PAINTMATCH_ALLOWED_ORIGINS", "PAINTMATCH_SELFIE_DET_SIZE")
+ENV_VARS = ("PAINTMATCH_IMAGE_BASE_URL", "PAINTMATCH_ALLOWED_ORIGINS", "PAINTMATCH_SELFIE_DET_SIZE",
+            "PAINTMATCH_ARCFACE_WEIGHT")
 
 
 def load_app(monkeypatch, data_dir, **env):
@@ -22,6 +23,7 @@ def load_app(monkeypatch, data_dir, **env):
     sys.modules.pop("backend.app", None)
     module = importlib.import_module("backend.app")
     monkeypatch.setattr(module, "FaceEmbedder", FakeEmbedder)
+    monkeypatch.setattr(module, "AppearanceEmbedder", FakeAppearanceEmbedder)
     return module
 
 
@@ -37,7 +39,25 @@ def post_photo(client, data: bytes, k: int | None = None):
 
 
 def test_health(client):
-    assert client.get("/health").json() == {"ok": True, "faces_indexed": 4}
+    assert client.get("/health").json() == {"ok": True, "faces_indexed": 4, "matching": "arcface"}
+
+
+def test_health_reports_blend_when_index_has_appearance(monkeypatch, data_dir_with_appearance):
+    with TestClient(load_app(monkeypatch, data_dir_with_appearance).app) as client:
+        assert client.get("/health").json()["matching"] == "blend"
+
+
+def test_match_blends_appearance(monkeypatch, data_dir_with_appearance):
+    # Identity (red=0) points at "aaa"; appearance (blue=1) points at "bbb".
+    photo = photo_bytes(red=0, blue=1)
+    with TestClient(load_app(monkeypatch, data_dir_with_appearance).app) as client:
+        top = post_photo(client, photo).json()["matches"][0]
+    assert top["image_id"] == "bbb"
+    assert {"arcface_score", "appearance_score"} <= top.keys()
+
+    module = load_app(monkeypatch, data_dir_with_appearance, PAINTMATCH_ARCFACE_WEIGHT="1.0")
+    with TestClient(module.app) as client:
+        assert post_photo(client, photo).json()["matches"][0]["image_id"] == "aaa"
 
 
 def test_match_returns_best_painting_first(client):

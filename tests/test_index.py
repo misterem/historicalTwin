@@ -14,7 +14,7 @@ from paintmatch.index import (
     FACE_FIELDS,
 )
 
-from conftest import embedding_for, face_row
+from conftest import appearance_for, embedding_for, face_row
 
 
 def test_save_load_round_trip(data_dir):
@@ -73,7 +73,8 @@ def test_min_det_score_filters_faces(data_dir):
 def test_search_and_rank_agree(data_dir):
     index = FaceIndex(data_dir / "index")
     query = embedding_for(0)
-    assert index.search(query, k=3) == index.rank(index.embeddings @ query, k=3)
+    scores = index.embeddings @ query
+    assert index.search(query, k=3) == index.rank(scores, k=3, extra_scores={"arcface_score": scores})
 
 
 def test_painting_metadata_merged_when_present(data_dir):
@@ -93,3 +94,43 @@ def test_no_metadata_file_is_fine(data_dir):
     index = FaceIndex(data_dir / "index")
     assert index.paintings == {}
     assert "artist" not in index.search(embedding_for(0), k=1)[0]
+
+
+def test_blend_follows_the_arcface_weight(data_dir_with_appearance):
+    index = FaceIndex(data_dir_with_appearance / "index")
+    assert index.has_appearance
+    # Identity points at row 0 ("aaa"); appearance_for(1) points at row 2 ("bbb").
+    def top(weight):
+        return index.search(embedding_for(0), k=1, appearance_query=appearance_for(1), arcface_weight=weight)[0]
+    assert top(1.0)["image_id"] == "aaa"
+    assert top(0.0)["image_id"] == "bbb"
+    assert top(0.3)["image_id"] == "bbb"  # the production default leans on appearance
+    result = top(0.3)
+    assert result["appearance_score"] == pytest.approx(1.0, abs=1e-5)
+    assert -1 <= result["arcface_score"] <= 1
+
+
+def test_no_appearance_query_means_arcface_only(data_dir_with_appearance):
+    index = FaceIndex(data_dir_with_appearance / "index")
+    result = index.search(embedding_for(2), k=1)[0]
+    assert result["image_id"] == "bbb" and "appearance_score" not in result
+
+
+def test_stale_appearance_file_is_rejected(data_dir):
+    from paintmatch.index import save_appearance
+
+    # Rows in the wrong order, as if built for a different index.
+    save_appearance(data_dir / "index", np.stack([appearance_for(i) for i in range(4)]),
+                    ["bbb", "aaa", "aaa", "ccc"], [0, 0, 1, 0])
+    with pytest.raises(ValueError, match="doesn't match"):
+        FaceIndex(data_dir / "index")
+
+
+def test_appearance_from_another_model_is_rejected(data_dir):
+    from paintmatch.index import APPEARANCE_FILE
+
+    _, faces, _ = load_index(data_dir / "index")
+    np.savez(data_dir / "index" / APPEARANCE_FILE, embeddings=np.stack([appearance_for(i) for i in range(4)]),
+             image_id=faces["image_id"], face_idx=faces["face_idx"], model=np.array("some/other-model@abc"))
+    with pytest.raises(ValueError, match="built with"):
+        FaceIndex(data_dir / "index")
