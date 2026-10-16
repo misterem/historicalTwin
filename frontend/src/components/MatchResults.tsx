@@ -22,8 +22,11 @@ function caption(m: Match): string | null {
 export default function MatchResults({ selfieFace, matches, onReset }: Props) {
   const [selected, setSelected] = useState(0);
   const match = matches[selected];
-  const [card, setCard] = useState<{ match: Match; file: File } | null>(null);
-  const shareFile = card?.match === match ? card.file : null;
+  // file is null when the image couldn't be made; sharing then falls back to text and a link.
+  const [card, setCard] = useState<{ match: Match; file: File | null } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const preparing = card?.match !== match;
+  const shareFile = preparing ? null : card.file;
   const canShareFile = shareFile !== null && navigator.canShare?.({ files: [shareFile] });
 
   // Render the image ahead of time: browsers only open the share sheet straight from a click,
@@ -32,7 +35,10 @@ export default function MatchResults({ selfieFace, matches, onReset }: Props) {
     let cancelled = false;
     makeShareCard(selfieFace, match).then(
       (file) => !cancelled && setCard({ match, file }),
-      (err) => console.error("Couldn't make the share image", err),
+      (err) => {
+        console.error("Couldn't make the share image", err);
+        if (!cancelled) setCard({ match, file: null });
+      },
     );
     return () => {
       cancelled = true;
@@ -40,16 +46,23 @@ export default function MatchResults({ selfieFace, matches, onReset }: Props) {
   }, [selfieFace, match]);
 
   async function share() {
-    if (!shareFile) return;
-    if (canShareFile) {
+    const text = shareText(match, window.location.origin);
+    const data = shareFile && canShareFile ? { files: [shareFile], text } : shareFile ? null : { text };
+    if (data && navigator.share) {
       try {
-        await navigator.share({ files: [shareFile], text: shareText(match, window.location.origin) });
+        await navigator.share(data);
         return;
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return; // closed the share sheet
       }
     }
-    downloadFile(shareFile);
+    if (shareFile) {
+      downloadFile(shareFile);
+    } else {
+      await navigator.clipboard?.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   }
 
   return (
@@ -108,8 +121,8 @@ export default function MatchResults({ selfieFace, matches, onReset }: Props) {
       )}
 
       <div className={styles.actions}>
-        <button type="button" className="button primary" onClick={share} disabled={!shareFile}>
-          {canShareFile || !shareFile ? "Share" : "Download image"}
+        <button type="button" className="button primary" onClick={share} disabled={preparing}>
+          {copied ? "Link copied" : shareFile && !canShareFile ? "Download image" : "Share"}
         </button>
         <button type="button" className="button secondary" onClick={onReset}>
           Try another photo
