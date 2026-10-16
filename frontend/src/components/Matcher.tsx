@@ -20,6 +20,7 @@ type State =
 export default function Matcher() {
   const [state, setState] = useState<State>({ step: "start" });
   const fileInput = useRef<HTMLInputElement>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
   const request = useRef<AbortController | null>(null);
   const objectUrls = useRef<string[]>([]);
 
@@ -65,6 +66,13 @@ export default function Matcher() {
     [releaseObjectUrls, showError],
   );
 
+  function takeSelfie() {
+    // On phones and tablets, open the device's own camera app, with its flip, flash, zoom and
+    // timer. Desktop browsers ignore `capture`, so they keep the in-page camera.
+    if (window.matchMedia("(pointer: coarse)").matches) cameraInput.current?.click();
+    else setState({ step: "camera" });
+  }
+
   function onFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow choosing the same file again
@@ -74,6 +82,7 @@ export default function Matcher() {
   return (
     <div className={styles.matcher}>
       <input ref={fileInput} type="file" accept="image/*" hidden onChange={onFileChosen} />
+      <input ref={cameraInput} type="file" accept="image/*" capture="user" hidden onChange={onFileChosen} />
 
       {state.step === "start" && (
         <div className={styles.start}>
@@ -83,7 +92,7 @@ export default function Matcher() {
             </p>
           )}
           <div className={styles.actions}>
-            <button type="button" className="button primary" onClick={() => setState({ step: "camera" })}>
+            <button type="button" className="button primary" onClick={takeSelfie}>
               Take a selfie
             </button>
             <button type="button" className="button secondary" onClick={() => fileInput.current?.click()}>
