@@ -5,6 +5,7 @@ export default function Home() {
     <main className="page">
       <header className="hero">
         <h1>Historical Twin</h1>
+        <div className="rule" aria-hidden="true" />
         <p>Take a selfie and meet the portrait painting that looks the most like you.</p>
       </header>
 
