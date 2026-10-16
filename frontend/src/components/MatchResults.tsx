@@ -3,8 +3,9 @@
 /* eslint-disable @next/next/no-img-element -- static export has no image optimizer; the API
    already serves pre-sized thumbnails and crops (from a CDN in production). */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Match } from "@/lib/api";
+import { downloadFile, makeShareCard, shareText } from "@/lib/shareCard";
 import styles from "./MatchResults.module.css";
 
 type Props = {
@@ -21,6 +22,35 @@ function caption(m: Match): string | null {
 export default function MatchResults({ selfieFace, matches, onReset }: Props) {
   const [selected, setSelected] = useState(0);
   const match = matches[selected];
+  const [card, setCard] = useState<{ match: Match; file: File } | null>(null);
+  const shareFile = card?.match === match ? card.file : null;
+  const canShareFile = shareFile !== null && navigator.canShare?.({ files: [shareFile] });
+
+  // Render the image ahead of time: browsers only open the share sheet straight from a click,
+  // and drawing it after the click can take long enough to lose that.
+  useEffect(() => {
+    let cancelled = false;
+    makeShareCard(selfieFace, match).then(
+      (file) => !cancelled && setCard({ match, file }),
+      (err) => console.error("Couldn't make the share image", err),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [selfieFace, match]);
+
+  async function share() {
+    if (!shareFile) return;
+    if (canShareFile) {
+      try {
+        await navigator.share({ files: [shareFile], text: shareText(match, window.location.origin) });
+        return;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return; // closed the share sheet
+      }
+    }
+    downloadFile(shareFile);
+  }
 
   return (
     <section className={styles.results} aria-labelledby="results-heading">
@@ -77,9 +107,14 @@ export default function MatchResults({ selfieFace, matches, onReset }: Props) {
         </>
       )}
 
-      <button type="button" className="button primary" onClick={onReset}>
-        Try another photo
-      </button>
+      <div className={styles.actions}>
+        <button type="button" className="button primary" onClick={share} disabled={!shareFile}>
+          {canShareFile || !shareFile ? "Share" : "Download image"}
+        </button>
+        <button type="button" className="button secondary" onClick={onReset}>
+          Try another photo
+        </button>
+      </div>
     </section>
   );
 }
