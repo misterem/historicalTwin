@@ -11,6 +11,9 @@ const TEXT_WIDTH = 900;
 const COLORS = { bg: "#f6f1e7", surface: "#fffaf0", text: "#2a2420", muted: "#6f655b", accent: "#8a5a2b", frame: "#b08d57" };
 
 export const SHARE_FILE_NAME = "historical-twin.png";
+// Give up on the image after this long, so the share button falls back to a link instead of
+// staying disabled.
+const TIMEOUT_MS = 10_000;
 
 /** The fonts next/font loaded, as a CSS font-family list. */
 function fontFamily(variable: string, fallback: string): string {
@@ -74,8 +77,22 @@ function drawFace(ctx: CanvasRenderingContext2D, image: ImageBitmap | null, left
   ctx.letterSpacing = "0px";
 }
 
+function warn<T>(what: string, fallback: T) {
+  return (err: unknown) => {
+    console.warn(`Share image: couldn't load the ${what}`, err);
+    return fallback;
+  };
+}
+
 /** Render the share image for one match. `selfieFace` is the object URL of the user's face crop. */
-export async function makeShareCard(selfieFace: string | null, match: Match): Promise<File> {
+export function makeShareCard(selfieFace: string | null, match: Match): Promise<File> {
+  return Promise.race([
+    renderCard(selfieFace, match),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`timed out after ${TIMEOUT_MS} ms`)), TIMEOUT_MS)),
+  ]);
+}
+
+async function renderCard(selfieFace: string | null, match: Match): Promise<File> {
   const display = fontFamily("--font-display", "Georgia, serif");
   const body = fontFamily("--font-body", "system-ui, sans-serif");
   const fonts = {
@@ -85,10 +102,12 @@ export async function makeShareCard(selfieFace: string | null, match: Match): Pr
     detail: `400 34px ${body}`,
     site: `500 30px ${body}`,
   };
+  // Only the painting is essential: without the selfie the card shows an empty circle, and
+  // without the web fonts it falls back to Georgia and system-ui.
   const [you, painting] = await Promise.all([
-    selfieFace ? loadImage(selfieFace) : null,
+    selfieFace ? loadImage(selfieFace).catch(warn("selfie", null)) : null,
     loadImage(match.crop_url),
-    ...Object.values(fonts).map((font) => document.fonts.load(font)),
+    ...Object.values(fonts).map((font) => document.fonts.load(font).catch(warn(`font ${font}`, []))),
   ]);
 
   const canvas = document.createElement("canvas");
