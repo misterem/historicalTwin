@@ -130,3 +130,10 @@
 .thumb[aria-pressed="true"] {
   color: var(--text);
 }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
