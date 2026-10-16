@@ -1,16 +1,24 @@
 import type { Metadata, Viewport } from "next";
-import { Cormorant_Garamond, Geist } from "next/font/google";
+import { EB_Garamond, Playfair_Display, Playfair_Display_SC } from "next/font/google";
 import "./globals.css";
 
-const display = Cormorant_Garamond({
-  variable: "--font-cormorant",
+const display = Playfair_Display({
+  variable: "--font-playfair",
   subsets: ["latin"],
-  weight: ["500", "600"],
+  weight: ["500", "600", "800"],
+  style: ["normal", "italic"],
 });
 
-const body = Geist({
-  variable: "--font-geist-sans",
+const caps = Playfair_Display_SC({
+  variable: "--font-playfair-sc",
   subsets: ["latin"],
+  weight: ["400", "700"],
+});
+
+const body = EB_Garamond({
+  variable: "--font-garamond",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
@@ -19,15 +27,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f6f1e7" },
-    { media: "(prefers-color-scheme: dark)", color: "#16130f" },
-  ],
+  themeColor: "#2e0b0e",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable}`}>
+    <html lang="en" className={`${display.variable} ${caps.variable} ${body.variable}`}>
       <body>{children}</body>
     </html>
   );

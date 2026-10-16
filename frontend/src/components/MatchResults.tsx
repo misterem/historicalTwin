@@ -14,8 +14,8 @@ type Props = {
   onReset: () => void;
 };
 
-function caption(m: Match): string | null {
-  const parts = [m.title, m.artist, m.year].filter(Boolean);
+function byline(m: Match): string | null {
+  const parts = [m.artist, m.year].filter(Boolean);
   return parts.length ? parts.join(" · ") : null;
 }
 
@@ -70,22 +70,32 @@ export default function MatchResults({ selfieFace, matches, onReset }: Props) {
       <h2 id="results-heading" className={styles.heading}>
         {selected === 0 ? "Your historical twin" : "Another resemblance"}
       </h2>
+      <div className="rule" aria-hidden="true" />
 
       <div className={styles.pair}>
         <figure className={styles.face}>
-          {selfieFace ? <img src={selfieFace} alt="Your face" /> : <div className={styles.placeholder} />}
+          <div className={`${styles.oval} gilt`}>
+            {selfieFace ? <img src={selfieFace} alt="Your face" /> : <div className={styles.placeholder} />}
+          </div>
           <figcaption>You</figcaption>
         </figure>
         <figure className={styles.face}>
-          <img src={match.crop_url} alt="The matching face in the painting" />
+          <div className={`${styles.oval} gilt`}>
+            <img src={match.crop_url} alt="The matching face in the painting" />
+          </div>
           <figcaption>The painting</figcaption>
         </figure>
       </div>
 
-      <a className={styles.frame} href={match.thumb_url} target="_blank" rel="noreferrer">
+      <a className={`${styles.frame} gilt`} href={match.thumb_url} target="_blank" rel="noreferrer">
         <img src={match.thumb_url} alt="The full painting" />
       </a>
-      {caption(match) && <p className={styles.caption}>{caption(match)}</p>}
+      {(match.title || byline(match)) && (
+        <div className={styles.plaque}>
+          {match.title && <p className={styles.title}>{match.title}</p>}
+          {byline(match) && <p className={styles.byline}>{byline(match)}</p>}
+        </div>
+      )}
       {match.museum && (
         <p className={styles.credit}>
           {match.url ? (

@@ -91,6 +91,9 @@ export default function Matcher() {
               {state.error}
             </p>
           )}
+          <div className={`${styles.portrait} gilt`} aria-hidden="true">
+            <span>Your portrait awaits</span>
+          </div>
           <div className={styles.actions}>
             <button type="button" className="button primary" onClick={takeSelfie}>
               Take a selfie
@@ -106,7 +109,9 @@ export default function Matcher() {
 
       {state.step === "matching" && (
         <div className={styles.matching} aria-live="polite">
-          <img className={styles.preview} src={state.preview} alt="Your photo" />
+          <div className={`${styles.portrait} gilt`}>
+            <img className={styles.preview} src={state.preview} alt="Your photo" />
+          </div>
           <p>Searching the portraits for your twin…</p>
         </div>
       )}

@@ -1,51 +1,43 @@
+/* "The Portrait Gallery": a Victorian salon with oxblood damask walls, gilded frames and brass
+   plaques. The look depends on its dark walls, so there is one theme rather than light and dark. */
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
-  --bg: #f6f1e7;
-  --surface: #fffaf0;
-  --text: #2a2420;
-  --muted: #6f655b;
-  --accent: #8a5a2b;
-  --accent-text: #fffaf0;
-  --frame: #b08d57;
-  --border-strong: rgb(42 36 32 / 0.35);
-  --error-bg: #fbeae5;
-  --error-border: #e2b4a6;
-  --error-text: #7a2e1c;
-  --shadow: 0 10px 30px rgb(42 36 32 / 0.18);
-  --radius: 14px;
+  --wall: #4d1519;
+  --wall-dark: #2e0b0e;
+  --text: #f4e7c9;
+  --muted: #d2b98f;
+  --gold: #c9a24a;
+  --gold-light: #f3d58a;
+  --gold-text: #f0d58f;
+  --gold-dark: #8d6a26;
+  --error-bg: #2a0a0c;
+  --error-border: #a8822f;
+  --error-text: #f3c4b5;
+  --shadow: 0 14px 30px rgb(0 0 0 / 0.6);
 
-  --font-display: var(--font-cormorant), Georgia, serif;
-  --font-body: var(--font-geist-sans), system-ui, sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #16130f;
-    --surface: #211c17;
-    --text: #efe6d8;
-    --muted: #a89c8c;
-    --accent: #d4a464;
-    --accent-text: #16130f;
-    --frame: #a8834a;
-    --border-strong: rgb(239 230 216 / 0.35);
-    --error-bg: #3a1f17;
-    --error-border: #7a3b29;
-    --error-text: #f3c4b5;
-    --shadow: 0 10px 30px rgb(0 0 0 / 0.5);
-  }
+  --font-display: var(--font-playfair), Georgia, serif;
+  --font-caps: var(--font-playfair-sc), Georgia, serif;
+  --font-body: var(--font-garamond), Georgia, serif;
 }
 
 * {
   box-sizing: border-box;
 }
 
-html,
+html {
+  background: var(--wall-dark);
+}
+
 body {
   margin: 0;
-  background: var(--bg);
+  min-height: 100dvh;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='80'%3E%3Cg fill='none' stroke='%23e8c98a' stroke-opacity='.10' stroke-width='1.4'%3E%3Cpath d='M30 4C44 20 44 30 30 40 16 30 16 20 30 4Z'/%3E%3Cpath d='M30 40C44 50 44 60 30 76 16 60 16 50 30 40Z'/%3E%3Cpath d='M0 40C14 30 14 20 0 4M60 40C46 30 46 20 60 4M0 40C14 50 14 60 0 76M60 40C46 50 46 60 60 76'/%3E%3Ccircle cx='30' cy='40' r='3'/%3E%3C/g%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 50% 15%, var(--wall), var(--wall-dark) 75%);
   color: var(--text);
   font-family: var(--font-body);
+  font-size: 17px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -53,7 +45,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 40px;
+  gap: 32px;
   min-height: 100dvh;
   max-width: 960px;
   margin: 0 auto;
@@ -61,28 +53,58 @@ body {
 }
 
 .hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
   text-align: center;
 }
 
 .hero h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2.75rem, 10vw, 4.5rem);
-  font-weight: 600;
-  line-height: 1;
+  font-size: clamp(2.6rem, 11vw, 4.5rem);
+  font-weight: 800;
+  line-height: 1.05;
+  background: linear-gradient(180deg, #fbe7ae, var(--gold) 60%, var(--gold-dark));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .hero p {
-  max-width: 34ch;
-  margin: 16px auto 0;
+  max-width: 30ch;
+  margin: 0;
   color: var(--muted);
   font-size: 1.1rem;
+  font-style: italic;
   line-height: 1.5;
+}
+
+/* A thin gold line with a bead in the middle, under headings. */
+.rule {
+  width: 140px;
+  height: 10px;
+  flex-shrink: 0;
+  background:
+    radial-gradient(circle, #d8b468 3px, transparent 3.5px) center / 10px 10px no-repeat,
+    linear-gradient(#d8b468, #d8b468) left center / 60px 1px no-repeat,
+    linear-gradient(#d8b468, #d8b468) right center / 60px 1px no-repeat;
+}
+
+/* A gilded frame: put the picture inside, with padding for the frame's width. */
+.gilt {
+  background: linear-gradient(135deg, #7a5a20, var(--gold-light) 25%, #a8822f 50%, #f0d184 75%, #7a5a20);
+  box-shadow:
+    inset 0 0 0 2px #4a3410,
+    inset 0 0 0 6px #e9c97a,
+    inset 0 0 0 8px #6b4c1a,
+    var(--shadow);
 }
 
 .footer {
   margin-top: auto;
-  color: var(--muted);
+  color: #b99a7a;
   font-size: 0.85rem;
   text-align: center;
 }
@@ -94,9 +116,11 @@ body {
 .button {
   min-height: 48px;
   padding: 0 24px;
-  border-radius: 999px;
-  font: inherit;
-  font-weight: 500;
+  border-radius: 2px;
+  font-family: var(--font-caps);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   cursor: pointer;
   transition: opacity 0.15s, transform 0.15s;
 }
@@ -112,17 +136,22 @@ body {
 
 .button.primary {
   border: 0;
-  background: var(--accent);
-  color: var(--accent-text);
+  background: linear-gradient(180deg, #f6dd9a, var(--gold) 60%, #a8822f);
+  color: #3d1206;
+  box-shadow:
+    inset 0 0 0 1px #6b4c1a,
+    inset 0 0 0 3px rgb(246 221 154 / 0.6),
+    0 4px 12px rgb(0 0 0 / 0.5);
 }
 
 .button.secondary {
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--gold);
   background: transparent;
-  color: var(--text);
+  color: var(--gold-text);
+  box-shadow: inset 0 0 0 3px transparent, inset 0 0 0 4px rgb(201 162 74 / 0.4);
 }
 
 .button:focus-visible {
-  outline: 3px solid var(--frame);
-  outline-offset: 2px;
+  outline: 3px solid var(--gold-light);
+  outline-offset: 3px;
 }
