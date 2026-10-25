@@ -1,6 +1,7 @@
 import sys
 
 import build_appearance
+from paintmatch.appearance import CACHE_FILE
 from paintmatch.index import FaceIndex, crop_name, load_index
 
 from conftest import FakeAppearanceEmbedder, appearance_for, photo_bytes
@@ -19,7 +20,7 @@ def test_builds_aligned_appearance_embeddings(monkeypatch, data_dir):
     assert index.has_appearance
     for row in range(len(keys)):
         assert (index.appearance[row] @ appearance_for(10 + row)) > 0.999
-    assert (data_dir / "cache" / "appearance-dinov2-small.npz").exists()
+    assert (data_dir / "cache" / CACHE_FILE).exists()
 
 
 def test_refuses_when_crops_are_missing(monkeypatch, data_dir):

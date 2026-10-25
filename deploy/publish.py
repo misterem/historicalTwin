@@ -75,7 +75,8 @@ def parse_args() -> argparse.Namespace:
     # Caps how far Cloud Run can scale, and therefore the worst-case bill.
     p.add_argument("--max-instances", type=int, default=3)
     # With DINOv2 blending, 1 vCPU took ~3 s per match vs ~1.3 s on 2. Per-match cost is similar,
-    # since billing is per vCPU-second and matches finish ~2x faster.
+    # since billing is per vCPU-second and matches finish ~2x faster. DINOv3, which replaced it,
+    # is faster per face on a laptop CPU; Cloud Run hasn't been re-measured.
     p.add_argument("--cpu", type=int, default=2)
     return p.parse_args()
 

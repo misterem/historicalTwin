@@ -32,7 +32,7 @@ SELFIE_MAX_SIDE = 1280
 # Detector input size for selfies. 320 is ~1.7x faster than 640 but landmarks are a bit
 # less precise, which shifts similarity scores slightly (0.975 -> 0.948 on a self-match).
 SELFIE_DET_SIZE = int(os.environ.get("PAINTMATCH_SELFIE_DET_SIZE", "640"))
-# ArcFace (identity) vs DINOv2 (appearance) weight; only used when the index has appearance embeddings.
+# ArcFace (identity) vs DINOv3 (appearance) weight; only used when the index has appearance embeddings.
 ARCFACE_WEIGHT = float(os.environ.get("PAINTMATCH_ARCFACE_WEIGHT", str(DEFAULT_ARCFACE_WEIGHT)))
 
 state: dict = {}

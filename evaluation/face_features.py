@@ -1,4 +1,4 @@
-"""Prototype face features for matching: a tighter DINOv2 crop and a skin-tone measure.
+"""Prototype face features for matching: a tighter DINOv3 crop and a skin-tone measure.
 
 Builds both for every face in the index and caches them, so review_matches.py can try them
 as extra blend terms:
@@ -81,7 +81,7 @@ def load_features(data_dir: Path, index: FaceIndex, margin: float = TIGHT_MARGIN
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--data-dir", type=Path, default=REPO_ROOT / "data")
-    p.add_argument("--margin", type=float, default=TIGHT_MARGIN, help="crop margin for the tight DINOv2 crop")
+    p.add_argument("--margin", type=float, default=TIGHT_MARGIN, help="crop margin for the tight DINOv3 crop")
     p.add_argument("--max-side", type=int, default=1280, help="must match build_index.py's --max-side")
     args = p.parse_args()
 

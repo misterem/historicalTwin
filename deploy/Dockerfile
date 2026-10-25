@@ -26,8 +26,9 @@ RUN .venv/bin/python -c "from paintmatch.faces import FaceEmbedder; FaceEmbedder
              /app/insightface/models/buffalo_l/2d106det.onnx \
              /app/insightface/models/buffalo_l/genderage.onnx
 
-# Bake in the DINOv2 appearance model (88 MB) so containers start without downloading it.
-# Its own HF cache keeps it apart from the assets download; xet's chunk cache isn't needed at runtime.
+# Bake in the DINOv3 appearance model (86 MB) so containers start without downloading it. It lands
+# in /app/hf/paintmatch/ (see paintmatch.appearance.model_dir), apart from the assets download;
+# xet's chunk cache isn't needed at runtime.
 RUN HF_HOME=/app/hf .venv/bin/python -c "from paintmatch.appearance import AppearanceEmbedder; AppearanceEmbedder()" \
     && rm -rf /app/hf/xet
 

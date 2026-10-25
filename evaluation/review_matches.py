@@ -7,13 +7,20 @@ stay hidden and rows are shuffled until you click "Reveal", so the comparison is
 Variants:
   arcface         ArcFace identity similarity, detector input 640 (what the app ships)
   arcface-det320  the same with detector input 320 (~1.7x faster API)
-  dinov2          DINOv2 appearance similarity of the face crop (hair, colors, pose)
-  blend           alpha * arcface + (1 - alpha) * dinov2, each z-scored per photo
-  blend-tight     the blend with DINOv2 on a tighter face crop (less hair, background, clothes)
+  dinov3          DINOv3 appearance similarity of the face crop (hair, colors, pose)
+  blend           alpha * arcface + (1 - alpha) * dinov3, each z-scored per photo (production)
+  blend-tight     the blend with DINOv3 on a tighter face crop (less hair, background, clothes)
   blend-skin      the blend plus --skin-weight * skin-tone closeness (ITA, see face_features.py)
   blend-tight-skin  both
+  dinov2          DINOv2 appearance similarity, the model production used before (see dinov2.py)
+  blend-dinov2    the blend with DINOv2 in place of DINOv3 (the previous production)
 
-The last three need the feature cache from evaluation/face_features.py.
+blend-tight and the *-skin variants need the feature cache from evaluation/face_features.py.
+The DINOv2 variants embed any painting crops missing from dinov2.py's cache first.
+
+To compare DINOv3 with DINOv2:
+
+    uv run evaluation/review_matches.py data/review-photos/set --variants dinov2,dinov3,blend-dinov2,blend
 
 The page embeds small crops of your photos' faces and lives under data/ (gitignored).
 Don't publish it.
@@ -35,10 +42,12 @@ from pathlib import Path
 
 import numpy as np
 
+from paintmatch.appearance import CACHE_FILE as APPEARANCE_CACHE_FILE
 from paintmatch.appearance import CROP_SIZE, AppearanceEmbedder, embed_crops
 from paintmatch.faces import FaceEmbedder, face_crop, load_image
 from paintmatch.index import DEFAULT_ARCFACE_WEIGHT, FaceIndex, blend_scores, crop_name, thumb_name, zscore
 
+from dinov2 import DINOv2Embedder, painting_embeddings
 from face_features import TIGHT_MARGIN, ita, load_features, skin_lab
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -47,12 +56,17 @@ PHOTO_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 VARIANTS = {
     "arcface": "ArcFace, detector 640 (current)",
     "arcface-det320": "ArcFace, detector 320",
-    "dinov2": "DINOv2 appearance",
-    "blend": "Blend: ArcFace + DINOv2 (production)",
-    "blend-tight": "Blend, tight DINOv2 crop",
+    "dinov3": "DINOv3 appearance",
+    "blend": "Blend: ArcFace + DINOv3 (production)",
+    "blend-tight": "Blend, tight DINOv3 crop",
     "blend-skin": "Blend + skin tone",
-    "blend-tight-skin": "Blend, tight DINOv2 crop + skin tone",
+    "blend-tight-skin": "Blend, tight DINOv3 crop + skin tone",
+    "dinov2": "DINOv2 appearance",
+    "blend-dinov2": "Blend: ArcFace + DINOv2 (previous production)",
 }
+FEATURE_VARIANTS = {"blend-tight", "blend-skin", "blend-tight-skin"}
+APPEARANCE_VARIANTS = {"dinov3", "blend"} | FEATURE_VARIANTS  # production's appearance model
+DINOV2_VARIANTS = {"dinov2", "blend-dinov2"}
 DEFAULT_SKIN_WEIGHT = 0.5
 
 
@@ -87,8 +101,9 @@ def main() -> None:
     variants = [v.strip() for v in args.variants.split(",") if v.strip()]
     if unknown := set(variants) - set(VARIANTS):
         sys.exit(f"unknown variants: {', '.join(sorted(unknown))}")
-    needs_dinov2 = any(v.startswith(("dinov2", "blend")) for v in variants)
-    needs_features = any(v.startswith("blend-") for v in variants)
+    needs_appearance = bool(APPEARANCE_VARIANTS.intersection(variants))
+    needs_dinov2 = bool(DINOV2_VARIANTS.intersection(variants))
+    needs_features = bool(FEATURE_VARIANTS.intersection(variants))
 
     photos = sorted(p for p in args.photos.rglob("*") if p.suffix.lower() in PHOTO_SUFFIXES)
     if not photos:
@@ -105,7 +120,7 @@ def main() -> None:
     detector = FaceEmbedder(det_size=640)
     detector_320 = FaceEmbedder(det_size=320) if "arcface-det320" in variants else None
     appearance = painting_appearance = None
-    if needs_dinov2:
+    if needs_appearance:
         appearance = AppearanceEmbedder()
         crop_paths = [
             crops_dir / crop_name(image_id, int(face_idx))
@@ -113,8 +128,12 @@ def main() -> None:
         ]
         painting_appearance = (
             index.appearance if index.has_appearance
-            else embed_crops(appearance, crop_paths, args.data_dir / "cache" / "appearance-dinov2-small.npz")
+            else embed_crops(appearance, crop_paths, args.data_dir / "cache" / APPEARANCE_CACHE_FILE)
         )
+    appearance_v2 = painting_v2 = None
+    if needs_dinov2:
+        appearance_v2 = DINOv2Embedder()
+        painting_v2 = painting_embeddings(appearance_v2, args.data_dir, index)
 
     features = load_features(args.data_dir, index) if needs_features else None
     painting_ita = ita(features["lab"]) if features else None
@@ -146,8 +165,10 @@ def main() -> None:
 
         arcface = index.embeddings @ face.embedding
         dino = None
-        if needs_dinov2:
+        if needs_appearance:
             dino = painting_appearance @ appearance.embed([face_crop(rgb, face.bbox, CROP_SIZE)])[0]
+        if needs_dinov2:
+            dino_v2 = painting_v2 @ appearance_v2.embed([face_crop(rgb, face.bbox, CROP_SIZE)])[0]
         if needs_features:
             tight = features["tight"] @ appearance.embed([face_crop(rgb, face.bbox, CROP_SIZE, margin=TIGHT_MARGIN)])[0]
             skin = skin_closeness(float(ita(skin_lab(rgb, face.bbox))), painting_ita)
@@ -161,8 +182,12 @@ def main() -> None:
                     entry["results"][variant] = None  # detector missed the face at this size
                     continue
                 scores = index.embeddings @ faces_320[0].embedding
-            elif variant == "dinov2":
+            elif variant == "dinov3":
                 scores = dino
+            elif variant == "dinov2":
+                scores = dino_v2
+            elif variant == "blend-dinov2":
+                scores = blend_scores(arcface, dino_v2, args.alpha)
             else:
                 scores = blend_scores(arcface, tight if "tight" in variant else dino, args.alpha)
                 if variant.endswith("-skin"):

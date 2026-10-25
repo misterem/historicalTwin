@@ -79,11 +79,15 @@ Run it after `build_index.py` has downloaded the images, and restart the API aft
 
 ## Add appearance embeddings
 
-Matching blends two similarities. **ArcFace** measures facial identity, and **DINOv2**
+Matching blends two similarities. **ArcFace** measures facial identity, and **DINOv3**
 measures overall look: hair, coloring, pose and age. In a blind review of 28 portraits,
-results that used DINOv2 were preferred about 2 to 1 over ArcFace alone, while ArcFace
-still found the actual person when they had been painted. The blend weights ArcFace 0.3
-and DINOv2 0.7 (`PAINTMATCH_ARCFACE_WEIGHT`).
+results that used an appearance model (DINOv2 at the time) were preferred about 2 to 1 over
+ArcFace alone, while ArcFace still found the actual person when they had been painted. A
+second blind review of the same photos preferred DINOv3 over DINOv2 (18 to 8 picks), so it
+replaced DINOv2. The blend weights ArcFace 0.3 and DINOv3 0.7 (`PAINTMATCH_ARCFACE_WEIGHT`).
+
+DINOv3's weights are under Meta's DINOv3 License (royalty-free, commercial use allowed, with
+use restrictions), not Apache-2.0 like DINOv2's.
 
 ```bash
 uv run indexing/build_appearance.py   # writes data/index/appearance.npz
@@ -100,10 +104,10 @@ Put 20–30 photos of different people in a folder, then build a side-by-side re
 uv run evaluation/review_matches.py ~/Pictures/selfies
 ```
 
-For each photo the page shows the top matches from four variants: ArcFace with detector
-input 640 (what the app ships) and 320, DINOv2 appearance similarity, and a blend of ArcFace
-and DINOv2. Variant names are hidden and rows shuffled until you click "Reveal", so you
-judge them blind.
+For each photo the page shows the top matches from several variants: ArcFace with detector
+input 640 and 320, DINOv3 appearance similarity, the blend of ArcFace and DINOv3 that the
+app ships, and the same two with DINOv2, the model production used before. Variant names
+are hidden and rows shuffled until you click "Reveal", so you judge them blind.
 
 - The page is written to `data/reviews/<folder>-<timestamp>/report.html` and loads the
   painting images from `data/`. To view it, serve `data/` locally and open the report URL:
@@ -113,11 +117,12 @@ judge them blind.
   ```
 
 - The report embeds crops of your photos' faces, so keep it local.
-- The first run embeds every painting face with DINOv2, which takes about 10 minutes. The
-  result is cached in `data/reviews/_cache/`.
+- Without `data/index/appearance.npz`, the first run embeds every painting face with DINOv3,
+  and the DINOv2 variants always do on their first run. Each takes 10–15 minutes, and the
+  results are cached in `data/cache/`.
 - `--variants arcface,blend` picks a subset, and `--alpha` sets ArcFace's weight in the
   blend (default 0.3, the production setting).
-- Experimental variants `blend-tight`, `blend-skin` and `blend-tight-skin` try DINOv2 on a
+- Experimental variants `blend-tight`, `blend-skin` and `blend-tight-skin` try DINOv3 on a
   tighter face crop and a skin-tone term. Build their features first with
   `uv run evaluation/face_features.py`. In a blind review the skin-tone term didn't help
   (in paintings it mostly measures varnish and lighting), and the tight crop was only
