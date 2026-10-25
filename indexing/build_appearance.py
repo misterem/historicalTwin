@@ -1,4 +1,4 @@
-"""Embed every indexed painting face with DINOv2 for appearance-blended matching.
+"""Embed every indexed painting face with DINOv3 for appearance-blended matching.
 
 Reads the face crops written by build_index.py (data/crops/<image_id>_<face_idx>.jpg)
 and writes data/index/appearance.npz, row-aligned with index.npz. The backend blends
@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from paintmatch.appearance import AppearanceEmbedder, embed_crops
+from paintmatch.appearance import CACHE_FILE, AppearanceEmbedder, embed_crops
 from paintmatch.index import APPEARANCE_FILE, crop_name, load_index, save_appearance
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -38,7 +38,7 @@ def main() -> None:
     if missing := [p for p in crop_paths if not p.exists()]:
         raise SystemExit(f"{len(missing)} face crops are missing (e.g. {missing[0].name}): re-run build_index.py")
 
-    cache = args.cache or args.data_dir / "cache" / "appearance-dinov2-small.npz"
+    cache = args.cache or args.data_dir / "cache" / CACHE_FILE
     embeddings = embed_crops(AppearanceEmbedder(), crop_paths, cache)
     save_appearance(index_dir, embeddings, image_ids, face_idxs)
     print(f"{len(embeddings)} appearance embeddings -> {index_dir / APPEARANCE_FILE}")

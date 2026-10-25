@@ -10,7 +10,7 @@ export type Match = Box & {
   det_score: number;
   face_px: number;
   face_id: number;
-  // Ranking score: a blend of standardized ArcFace and DINOv2 similarities. Higher is better,
+  // Ranking score: a blend of standardized ArcFace and DINOv3 similarities. Higher is better,
   // but it isn't a percentage or comparable across photos, so the UI shows ranks instead.
   score: number;
   arcface_score?: number; // raw cosine similarities, for debugging

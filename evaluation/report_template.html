@@ -138,7 +138,9 @@
           matches
             ? el("div", { class: "matches" }, ...matches.map(m =>
                 el("a", { href: m.thumb, target: "_blank", rel: "noreferrer", title: m.caption || "Unknown painting" },
-                  el("img", { src: m.crop, alt: m.caption || "painting face", loading: "lazy" }), m.score.toFixed(2))))
+                  el("img", { src: m.crop, alt: m.caption || "painting face", loading: "lazy" }),
+                  // Scores only after revealing: their scales differ per variant, which would unblind the rows.
+                  revealed ? m.score.toFixed(2) : "")))
             : el("p", { class: "error" }, "no face found at this detector size"),
           el("button", { type: "button", "aria-pressed": String(picked), onclick: () => pick(photo.name, variant) }, "Best"));
         card.append(row);

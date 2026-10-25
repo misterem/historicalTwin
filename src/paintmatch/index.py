@@ -9,9 +9,9 @@ atomic rename and the embeddings can never get out of step with their metadata:
 
 Two optional companion files, each rebuildable without re-embedding faces:
     paintings.json    artist/title/year per painting (indexing/build_metadata.py)
-    appearance.npz    DINOv2 appearance embeddings per face (indexing/build_appearance.py),
+    appearance.npz    DINOv3 appearance embeddings per face (indexing/build_appearance.py),
                       row-aligned with index.npz and checked against it on load. With it,
-                      search blends ArcFace identity and DINOv2 appearance similarity.
+                      search blends ArcFace identity and DINOv3 appearance similarity.
 
 Thumbnails live in <data_dir>/thumbs/<image_id>.jpg and face crops in
 <data_dir>/crops/<image_id>_<face_idx>.jpg.
@@ -36,8 +36,9 @@ PAINTINGS_FILE = "paintings.json"
 # museum/url only exist for paintings from museum open-access collections (fetch_museums.py).
 PAINTING_FIELDS = ("artist", "title", "year", "museum", "url")
 APPEARANCE_FILE = "appearance.npz"
-# Weight of ArcFace (identity) vs DINOv2 (appearance) in the blended score. Chosen from a blind
-# review where appearance-led rows won ~2:1; ArcFace keeps "this painting is actually you" hits.
+# Weight of ArcFace (identity) vs DINOv3 (appearance) in the blended score. Chosen from a blind
+# review where appearance-led rows won ~2:1 (with DINOv2, since replaced by DINOv3 at the same
+# weight); ArcFace keeps "this painting is actually you" hits.
 DEFAULT_ARCFACE_WEIGHT = 0.3
 
 FACE_FIELDS = {
@@ -167,7 +168,7 @@ class FaceIndex:
     ) -> list[dict]:
         """The k faces most like the query (see rank()).
 
-        `query` is the selfie's ArcFace embedding. With an `appearance_query` (its DINOv2
+        `query` is the selfie's ArcFace embedding. With an `appearance_query` (its DINOv3
         embedding) and appearance embeddings in the index, the ranking blends both; otherwise
         it's ArcFace alone. Results also carry the raw `arcface_score` and, when blending,
         `appearance_score` cosine similarities.
