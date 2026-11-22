@@ -1,235 +1,119 @@
-# paintmatch
+# Historical Twin
 
-Take a selfie, find the portrait painting that looks most like you.
+**Take a selfie and meet the portrait painting that looks the most like you.**
 
-How it works: every face in the
-[wikiart-portraits](https://huggingface.co/datasets/mixitymax/wikiart-portraits) dataset is
-detected (SCRFD) and embedded (ArcFace) once, offline. At request time the selfie gets the same
-treatment and the paintings are ranked by cosine similarity. Nothing is trained yet; see
-`training/`.
+👉 **Try it at [twin.maxaltman.com](https://twin.maxaltman.com)**
 
+Historical Twin compares your face with about 19,000 faces in some 17,000 portrait paintings,
+from Renaissance altarpieces to 20th-century presidential portraits, and shows you your
+closest matches, each with its artist, title and year where those are known.
+
+## Using it
+
+1. Open [twin.maxaltman.com](https://twin.maxaltman.com) on your phone or computer.
+2. Take a selfie with the camera, or upload a photo.
+3. See your best match: the painted face, the whole painting and its caption. Tap the runners-up
+   to switch between them, and, for museum works, follow the link to the museum's page.
+4. Share a card with your face next to your painted twin's, or download it.
+
+Good light and a face looking roughly at the camera give the best matches.
+
+### Privacy
+
+Your photo is processed in memory to find your matches and then discarded. It is never saved,
+logged or used for training, and neither is the face data computed from it. The share card is
+drawn in your browser, so your selfie isn't uploaded a second time.
+
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph offline ["Once, offline"]
+        P[Portrait paintings] --> D1[Detect faces<br/>SCRFD]
+        D1 --> E1[Embed each face<br/>ArcFace + DINOv3]
+        E1 --> I[(Face index)]
+    end
+    subgraph request ["Per selfie"]
+        S[Selfie, resized<br/>to 800px in the browser] --> D2[Detect face<br/>SCRFD]
+        D2 --> E2[Embed<br/>ArcFace + DINOv3]
+        E2 --> R[Blend scores and rank<br/>one match per painting]
+        I --> R
+        R --> M[Top matches]
+    end
 ```
-src/paintmatch/   shared code: faces.py (decode/detect/embed), index.py (index files + search)
-indexing/         build_index.py: dataset -> data/index, data/thumbs, data/crops
-backend/          FastAPI /match endpoint + a dev test page
-frontend/         the real web app (not started)
-training/         optional fine-tuning (not started)
-data/             generated, gitignored
-```
 
-## Setup
+Every face in the collection is found and embedded ahead of time. When you upload a selfie,
+the server runs the same pipeline on it and compares it with every painted face. At this
+scale, a brute-force comparison in NumPy takes a few milliseconds, so no vector database
+is needed. Nothing is trained: all of the models are pretrained.
 
-Requires [uv](https://docs.astral.sh/uv/). It installs Python 3.11 and the dependencies:
+### Two kinds of likeness
+
+A match is scored on two things.
+
+- **Identity** comes from [ArcFace](https://github.com/deepinsight/insightface) (InsightFace
+  `buffalo_l`), a face-recognition model. It's good at telling whether two faces belong to the
+  same person, so it will find a painting of you if one exists. On its own it tends to ignore
+  hair, coloring, age and pose, which are much of what makes a portrait feel like you.
+- **Appearance** comes from [DINOv3](https://github.com/facebookresearch/dinov3), a general
+  vision model, applied to a crop of the face. It captures that overall look.
+
+The two scores are normalized per query and blended, 30% identity and 70% appearance. The
+weights were chosen in blind side-by-side reviews: for each of 28 test photos, reviewers
+picked the best results without knowing which method produced them. Results that used an
+appearance model were preferred about 2 to 1 over ArcFace alone, and a second review chose
+DINOv3 over its predecessor, DINOv2.
+
+### The collection
+
+- **WikiArt portraits:** about 14,000 paintings from the
+  [wikiart-portraits](https://huggingface.co/datasets/mixitymax/wikiart-portraits) dataset.
+  The dataset has no artist or title metadata, so each painting is looked up by perceptual
+  hash in the [ArtGAN WikiArt](https://www.kaggle.com/datasets/steubk/wikiart) dataset. About
+  71% are identified; the rest are shown without a caption rather than with a wrong one.
+- **Museum collections:** about 3,400 public-domain (CC0) portraits from
+  [The Metropolitan Museum of Art](https://www.metmuseum.org/), the Smithsonian's
+  [National Portrait Gallery](https://npg.si.edu/) and the
+  [Smithsonian American Art Museum](https://americanart.si.edu/), each linked to the museum's
+  page for that work. Paintings already in the WikiArt set are skipped.
+
+Most of the collection is European and American painting, so people of other backgrounds,
+especially Black and East Asian people, have far fewer close matches. That's a gap in the
+collection rather than in the matching, and adding portraits from more traditions is the
+most useful thing that could happen next.
+
+## Architecture
+
+| Part | What it is | Where it runs |
+|---|---|---|
+| Website ([`frontend/`](frontend/)) | Next.js static site with the camera, results and share card | Netlify |
+| API ([`backend/`](backend/)) | FastAPI service with a `/match` endpoint; also serves painting thumbnails and face crops | Google Cloud Run, scaling to zero when idle |
+| Face pipeline ([`src/paintmatch/`](src/paintmatch/)) | Shared decode → detect → embed code, used by both the indexer and the API so paintings and selfies are processed identically | inside the API |
+| Indexer ([`indexing/`](indexing/)) | Downloads the paintings, builds the face index, adds metadata and museum works | offline, on a laptop |
+| Assets | Face index, metadata, thumbnails and crops | a [Hugging Face dataset](https://huggingface.co/datasets/mixitymax/historicaltwin-assets), baked into the API image at build time |
+
+The first match after a quiet period can take 10–20 seconds while a server instance starts.
+After that, a match takes about a second.
+
+## Running it yourself
+
+You need [uv](https://docs.astral.sh/uv/) and, for the website, Node.js.
 
 ```bash
 uv sync
+uv run indexing/build_index.py --limit 200   # index a small sample of paintings
+uv run uvicorn backend.app:app --reload      # API and a simple test page at localhost:8000
 ```
 
-## Tests
+[DEVELOPMENT.md](DEVELOPMENT.md) covers building the full index, adding museum works and
+metadata, reviewing match quality and deploying. [frontend/README.md](frontend/README.md)
+covers the website.
 
-```bash
-uv run pytest
-```
+## Licenses and credits
 
-The tests use a tiny synthetic index and a fake face model, so they run in about a second
-with no downloads. CI runs them on pull requests that touch Python code.
-
-## Build the index
-
-```bash
-uv run indexing/build_index.py --limit 200   # smoke test
-uv run indexing/build_index.py               # all 15k paintings
-```
-
-- On an M-series Mac's CPU it runs at about 6 paintings/s, so the full set takes roughly
-  45 minutes plus download time. It checkpoints, so you can Ctrl-C and re-run to resume.
-- To use a cloud GPU instead, `uv pip install onnxruntime-gpu` (after removing `onnxruntime`)
-  and pass `--providers CUDAExecutionProvider CPUExecutionProvider`.
-- Run `hf auth login` first if downloads get rate-limited.
-
-## Add museum portraits
-
-The WikiArt set is mostly European. To broaden it, `fetch_museums.py` adds public-domain
-(CC0) portrait paintings from the Met, the Smithsonian's National Portrait Gallery and the
-Smithsonian American Art Museum, about 3,500 objects:
-
-```bash
-uv run indexing/fetch_museums.py     # ~1 hour, mostly the Met's 1-request-per-second API limit
-uv run indexing/build_index.py       # indexes only the new paintings
-uv run indexing/build_metadata.py    # captions, plus a link to each museum's page
-uv run indexing/build_appearance.py
-```
-
-- It downloads the museums' catalogs (~650 MB) into `data/sources/` on the first run.
-- Paintings already in the WikiArt set are skipped, by perceptual hash.
-- Images and a `manifest.json` go to `data/raw/museums/`. The run is resumable.
-
-## Add painting metadata
-
-The dataset only has hashed filenames. This step looks each painting up in the
-[ArtGAN WikiArt](https://www.kaggle.com/datasets/steubk/wikiart) dataset by perceptual hash
-and records its artist, title and year. About 71% of paintings match; the rest get no
-caption rather than a wrong one.
-
-```bash
-uv run indexing/build_metadata.py   # writes data/index/paintings.json
-```
-
-Run it after `build_index.py` has downloaded the images, and restart the API afterwards.
-
-## Add appearance embeddings
-
-Matching blends two similarities. **ArcFace** measures facial identity, and **DINOv3**
-measures overall look: hair, coloring, pose and age. In a blind review of 28 portraits,
-results that used an appearance model (DINOv2 at the time) were preferred about 2 to 1 over
-ArcFace alone, while ArcFace still found the actual person when they had been painted. A
-second blind review of the same photos preferred DINOv3 over DINOv2 (18 to 8 picks), so it
-replaced DINOv2. The blend weights ArcFace 0.3 and DINOv3 0.7 (`PAINTMATCH_ARCFACE_WEIGHT`).
-
-DINOv3's weights are under Meta's DINOv3 License (royalty-free, commercial use allowed, with
-use restrictions), not Apache-2.0 like DINOv2's.
-
-```bash
-uv run indexing/build_appearance.py   # writes data/index/appearance.npz
-```
-
-Run it after `build_index.py`. Embeddings are cached per face crop, so re-runs are fast.
-Without the file, the API falls back to ArcFace alone.
-
-## Review match quality
-
-Put 20–30 photos of different people in a folder, then build a side-by-side review page:
-
-```bash
-uv run evaluation/review_matches.py ~/Pictures/selfies
-```
-
-For each photo the page shows the top matches from several variants: ArcFace with detector
-input 640 and 320, DINOv3 appearance similarity, the blend of ArcFace and DINOv3 that the
-app ships, and the same two with DINOv2, the model production used before. Variant names
-are hidden and rows shuffled until you click "Reveal", so you judge them blind.
-
-- The page is written to `data/reviews/<folder>-<timestamp>/report.html` and loads the
-  painting images from `data/`. To view it, serve `data/` locally and open the report URL:
-
-  ```bash
-  python3 -m http.server 8790 --bind 127.0.0.1 --directory data
-  ```
-
-- The report embeds crops of your photos' faces, so keep it local.
-- Without `data/index/appearance.npz`, the first run embeds every painting face with DINOv3,
-  and the DINOv2 variants always do on their first run. Each takes 10–15 minutes, and the
-  results are cached in `data/cache/`.
-- `--variants arcface,blend` picks a subset, and `--alpha` sets ArcFace's weight in the
-  blend (default 0.3, the production setting).
-- Experimental variants `blend-tight`, `blend-skin` and `blend-tight-skin` try DINOv3 on a
-  tighter face crop and a skin-tone term. Build their features first with
-  `uv run evaluation/face_features.py`. In a blind review the skin-tone term didn't help
-  (in paintings it mostly measures varnish and lighting), and the tight crop was only
-  slightly preferred.
-- "Copy picks" copies your picks as JSON, to share or save them.
-
-## Run the backend
-
-```bash
-uv run uvicorn backend.app:app --reload
-```
-
-Open http://localhost:8000 and upload a selfie. The test page shrinks the photo to 800px in
-the browser before uploading it.
-
-## Deploy
-
-The live app at https://twin.maxaltman.com runs on:
-
-- **Website:** Netlify serves the static frontend, building it from this repo.
-- **API and images:** Google Cloud Run runs the matching API, which also serves the
-  painting thumbnails and face crops. It scales to zero when idle, so at hobby traffic it
-  stays within Cloud Run's free tier.
-- **Assets:** a Hugging Face dataset holds the face index, painting metadata and images.
-  The API image downloads it at build time.
-
-### 1. Publish the assets
-
-Log in with a Hugging Face token that has write access (`uv run hf auth login`), then run:
-
-```bash
-uv run deploy/publish.py assets   # index + ~30k images -> HF dataset (resumable)
-```
-
-Hugging Face allows at most 10,000 files per folder, so the images are uploaded into
-subfolders. `deploy/Dockerfile` flattens them back after downloading.
-
-### 2. Deploy the API to Cloud Run
-
-You need a Google Cloud project with billing enabled; setting a budget alert is a good
-idea. Then install and log in to the gcloud CLI:
-
-```bash
-brew install --cask gcloud-cli
-gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
-```
-
-In a new project, Cloud Build runs as the default compute service account, which can't read
-the uploaded source until it has the Cloud Run Builder role. This is a one-time step;
-replace `PROJECT_ID` and `PROJECT_NUMBER`. `gcloud projects describe PROJECT_ID` shows the
-number.
-
-```bash
-gcloud projects add-iam-policy-binding PROJECT_ID \
-  --member=serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com \
-  --role=roles/run.builder
-```
-
-Then deploy:
-
-```bash
-uv run deploy/publish.py cloudrun
-```
-
-Cloud Build builds `deploy/Dockerfile` on Google's servers, pinned to the assets dataset's
-current commit, and deploys it with these settings:
-- 2 GiB of RAM and 2 vCPUs (with 1 vCPU, blended matching took ~3 s instead of ~1.3 s)
-- scales to zero when idle, with at most 3 instances
-- CORS allows `https://twin.maxaltman.com`
-
-The first request after a quiet period takes about 10–20 seconds while an instance starts.
-The site pings the API as soon as the page opens to hide most of that delay. Re-run
-`cloudrun` after code changes, and run `assets` then `cloudrun` after re-indexing.
-
-### 3. Website on Netlify
-
-Create a new site from this GitHub repo with **base directory `frontend`** and production
-branch `main`. Build settings, including the API URL, come from `frontend/netlify.toml`.
-Then add `twin.maxaltman.com` under Domain management. With Netlify DNS, the record is
-created automatically.
-
-### Alternative: your own container host
-
-The root `Dockerfile` builds an API image that leaves the images out, to pair with a CDN:
-
-1. **Images:** upload them to Cloudflare R2:
-   ```bash
-   export R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... R2_BUCKET=...
-   uv run indexing/upload_to_r2.py
-   ```
-2. **API image:** build it. `data/index` must exist.
-   ```bash
-   docker build --platform linux/amd64 -t paintmatch-api .
-   ```
-   Deploy it with 1–2 GB of RAM.
-
-| env var | purpose |
-|---|---|
-| `PAINTMATCH_IMAGE_BASE_URL` | public URL of the image bucket (required in that image) |
-| `PAINTMATCH_ALLOWED_ORIGINS` | comma-separated site origins allowed by CORS |
-| `PAINTMATCH_SELFIE_DET_SIZE` | `640` (default) or `320`: about 1.7x faster, scores shift slightly |
-| `PAINTMATCH_ARCFACE_WEIGHT` | ArcFace's share of the blended score, `0.3` by default; `1.0` means ArcFace only |
-| `PORT` | set by the host; defaults to 8080 |
-
-## Licensing note
-
-InsightFace's pretrained `buffalo_l` weights are licensed for **non-commercial research only**.
-Swap in a permissively licensed embedder before any commercial use. The ArtGAN WikiArt dataset
-used for painting metadata is likewise provided for non-commercial research only.
+- InsightFace's pretrained `buffalo_l` models are licensed for **non-commercial research
+  only**, and so is the ArtGAN WikiArt dataset used for captions. Historical Twin is a
+  non-commercial project.
+- DINOv3 is used under Meta's [DINOv3 License](https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md).
+- Museum images are CC0, courtesy of The Metropolitan Museum of Art and the Smithsonian
+  Institution's [Open Access](https://www.si.edu/openaccess) program.
